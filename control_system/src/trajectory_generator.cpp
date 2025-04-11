@@ -113,9 +113,9 @@ void rc_callback(const mavros_msgs::RCIn::ConstPtr &msg)
 
 void current_state_callback(const freyja_msgs::CurrentState::ConstPtr  &msg)
 {
-    px_current = msg -> state_vector[0];
-    py_current = msg -> state_vector[1];
-    pz_current = msg -> state_vector[2];
+    px_current = msg -> pn;
+    py_current = msg -> pe;
+    pz_current = msg -> pd;
 }
 
 

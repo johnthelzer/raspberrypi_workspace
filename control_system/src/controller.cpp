@@ -165,21 +165,21 @@ void Controller::reference_callback(const control_system::ReferenceState::ConstP
 }
 void Controller::state_callback(const freyja_msgs::CurrentState::ConstPtr  &msg)
 {
-    pn_ = msg -> state_vector[0];
-    pe_ = msg -> state_vector[1];
-    pd_ = msg -> state_vector[2];
-    vn_ = msg -> state_vector[3];
-    ve_ = msg -> state_vector[4];
-    vd_ = msg -> state_vector[5];
-    qn_ = msg -> state_vector[6];
-    qe_ = msg -> state_vector[7];
-    qd_ = msg -> state_vector[8];
-    wn_ = msg -> state_vector[9];
-    we_ = msg -> state_vector[10];
-    wd_ = msg -> state_vector[11];
-    real_roll = msg->state_vector[12];
-    real_pitch = msg->state_vector[13];
-    real_yaw = msg -> state_vector[14];
+    pn_ = msg -> pn;
+    pe_ = msg -> pe;
+    pd_ = msg -> pd;
+    vn_ = msg -> vn;
+    ve_ = msg -> ve;
+    vd_ = msg -> vd;
+    qn_ = msg -> qn;
+    qe_ = msg -> qe;
+    qd_ = msg -> qd;
+    wn_ = msg -> wn;
+    we_ = msg -> we;
+    wd_ = msg -> wd;
+    real_roll = msg->roll;
+    real_pitch = msg->pitch;
+    real_yaw = msg -> yaw;
 }
 //other functions implementation:
 void Controller::compute_input(double& tn, double& te, double& td)
