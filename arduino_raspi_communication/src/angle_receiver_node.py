@@ -16,6 +16,9 @@ pitch = '0'#
 pitch_old = '0'
 pitch_dot = '0'
 pitch_dot_old = '0'
+time_interval = 0.01
+
+
 
 port = serial.Serial(port=port_name, baudrate=baudrate, timeout=0.25)
 print('port opened')
@@ -24,9 +27,10 @@ rospy.init_node('serial_grabber', anonymous=True)
 print('node started')
 serial_pub = rospy.Publisher('/theta_info', Float32MultiArray, queue_size = 1)
 print('topic published')
-rate = rospy.Rate(50)
-
+rate = rospy.Rate(100)
+message_arrive_time_previous = rospy.Time.now().to_sec()
 theta_array = Float32MultiArray()
+input_string = String()
 theta_array.data = []
 print('serial_grabber starting now')
 
@@ -35,7 +39,7 @@ while not rospy.is_shutdown():
 		incoming_data_string = port.read(port.inWaiting()).decode('utf-8')
 		#incoming_data_string = port.readline().decode('utf-8')
 		#debugging
-	#	print(incoming_data_string)
+		#print(incoming_data_string) #comment out when not needed
 		if len(incoming_data_string) > 0:
 			roll = 'r'
 			pitch = 'p'
@@ -118,14 +122,17 @@ while not rospy.is_shutdown():
 				roll_dot_float = float(roll_dot_old)
 			try:
 				pitch_dot_float = float(pitch_dot)
-				if(abs(pitch_dot_float - float(pitch_dot_old)) > 70):
+				if(abs(pitch_dot_float - float(pitch_dot_old)) > 1000):
 					pitch_dot_float = float(pitch_dot_old)
 				else:
 					pitch_dot_old = pitch_dot
 			except ValueError:
 				pitch_dot_float = float(pitch_dot_old)
 			#write data to messsage: roll, pitch, rolldot, pitchdot
-			theta_array.data = [roll_float, pitch_float, roll_dot_float, pitch_dot_float]
-		#	print(theta_array.data)
+			message_arrive_time = rospy.Time.now().to_sec()
+			time_interval = message_arrive_time - message_arrive_time_previous
+			theta_array.data = [roll_float, pitch_float, roll_dot_float, pitch_dot_float, time_interval]
+			print(theta_array.data) ##comment this out when not needed
 			serial_pub.publish(theta_array)
+			message_arrive_time_previous = message_arrive_time
 	rate.sleep()
