@@ -83,6 +83,10 @@ add_executable(trajectory_generator src/trajectory_generator.cpp)
 add_dependencies(trajectory_generator ${trajectory_generator_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(trajectory_generator ${catkin_LIBRARIES})
 
+add_executable(unscented_kalman_filter src/unscented_kalman_filter.cpp)
+add_dependencies(unscented_kalman_filter ${unscented_kalman_filter_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(unscented_kalman_filter ${catkin_LIBRARIES})
+
 add_executable(controller src/controller.cpp)
 add_dependencies(controller ${controller_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(controller ${catkin_LIBRARIES})
