@@ -97,10 +97,12 @@ double pz_current = 0;
 double px_offset = 0;
 double py_offset = 0;
 double pz_offset = 0;
+//rc value
+double channel6_pwm = 1500;
 
 void rc_callback(const mavros_msgs::RCIn::ConstPtr &msg)
 {
-    double channel6_pwm = msg->channels[5];
+    channel6_pwm = msg->channels[5];
     if(channel6_pwm > 1750)
     {
         hover = false;
@@ -131,27 +133,27 @@ void interpolate()
         int b = i % 4;
         if (b == 0)
         {
-            x_n[i] = 1;
-            y_n[i] = 1;
-            z_n[i] = 1;
+            x_n[i] = 0;
+            y_n[i] = 0;
+            z_n[i] = 0;
         }
         else if (b == 1)
         {
-            x_n[i] = 1;
-            y_n[i] = 1;
-            z_n[i] = 1;
+            x_n[i] = 0;
+            y_n[i] = 0;
+            z_n[i] = 0;
         }
         else if (b == 2)
         {
-            x_n[i] = 1;
-            y_n[i] = 1;
-            z_n[i] = 1;
+            x_n[i] = 0;
+            y_n[i] = 0;
+            z_n[i] = 0;
         }
         else //b == 3
         {
-            x_n[i] = 1;
-            y_n[i] = 1;
-            z_n[i] = 1;
+            x_n[i] = 0;
+            y_n[i] = 0;
+            z_n[i] = 0;
         }
     }
     //remember, all velocities at endpoints are 0.
@@ -276,7 +278,7 @@ void compute_trajectory()//computes relative trajectory
         vz_ref_future = 0;
     }
     
-    yaw_ref = 0/180*pi;
+    yaw_ref = pi*90/180;
 
 }
 

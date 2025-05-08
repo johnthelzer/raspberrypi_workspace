@@ -5,12 +5,14 @@ bool hover = true;
 bool delayed_one_period = false;
 bool gains_have_been_reset = false;
 //reference variables, initialized to 0
-double pn_ref = 0; double pe_ref = 0; double pd_ref = 0; double vn_ref = 0; double ve_ref = 0; double vd_ref = 0; double pn_ref_future = 0; double pe_ref_future = 0; double pd_ref_future = 0; double vn_ref_future = 0; double ve_ref_future = 0; double vd_ref_future = 0; double yaw_ref = 1.57;
+double pn_ref = 0; double pe_ref = 0; double pd_ref = 0; double vn_ref = 0; double ve_ref = 0; double vd_ref = 0; double pn_ref_future = 0; double pe_ref_future = 0; double pd_ref_future = 0; double vn_ref_future = 0; double ve_ref_future = 0; double vd_ref_future = 0; double yaw_ref = 90/180*pi;
 //current state variables, initialized to 0
 double pn_ = 0; double pe_ = 0; double pd_ = 0; double vn_ = 0; double ve_ = 0; double vd_ = 0; double qn_ = 0.0; double qe_ = 1.0; double qd_ = 0; double wn_ = 1; double we_ = 1; double wd_ = 1;
 double real_roll = 0.0;
 double real_pitch = 0.0;
 double real_yaw = 0.0;
+
+double channel6_pwm = 1500;
 using namespace std;
 
 
@@ -18,14 +20,14 @@ using namespace std;
 Controller::Controller() : nh_()
 {
     controller_rate = 50; //50;
-    mp = 0.26;
-    mq = 1.9;
-    r = 1;
+    mp = 0.294;
+    mq = 2.520;
+    r = 0.114;
     total_mass = mp + mq;
     thrust_max = 5.0*g;
     thrust_min = 0.1*g;
-    roll_max_deg = 30;
-    pitch_max_deg = 30;
+    roll_max_deg = 15;
+    pitch_max_deg = 15;
     //publishers and subscribers
     input_pub = nh_.advertise <freyja_msgs::CtrlCommand>("/rpyt_command", 1, true);
     controller_debug_pub = nh_.advertise<control_system::ControllerDebug>("/controller_debug", 1, true);
@@ -126,10 +128,17 @@ double sat(double x)
         return sgn(x);
     }
 }
+//yaw error calculation
+double calc_yaw_error(const double &a, const double &b)
+{
+    double yd = fmod(a - b + pi, 2*pi);
+    yd = yd < 0 ? yd+=2*pi : yd;
+    return yd - pi;
+}
 //callback function implementation
 void Controller::rc_callback(const mavros_msgs::RCIn::ConstPtr &msg)
 {
-    double channel6_pwm = msg->channels[5];
+    channel6_pwm = msg->channels[5];
     if(channel6_pwm > 1750)
     {
         hover = false;
@@ -373,15 +382,15 @@ void Controller::publish_to_mavros(double roll, double pitch, double yaw, double
     freyja_msgs::CtrlCommand input_msg;
     input_msg.roll = roll;
     input_msg.pitch = pitch;
-    input_msg.yaw = yaw;
+    input_msg.yaw = -1*yaw; //important to have the -1 there! makes error ref-actual
     input_msg.thrust = thrust_mag;
     input_msg.ctrl_mode = 0b00001111;
     input_pub.publish(input_msg);
 }
+
 /*all the control logic and function calls are encapsulated in this control_loop_function to increase simplicity and readability of the main function*/
 void Controller::control_loop_function()
 {
-    double yaw_tgt = yaw_ref;//get target yaw from reference!
     //declare sliding mode thrust variables
     double tn_sm = 0;
     double te_sm = 0;
@@ -390,13 +399,16 @@ void Controller::control_loop_function()
     double tn_hover = 0.0;
     double te_hover = 0.0;
     double td_hover = -1*total_mass*g;
-    double yaw_tgt_hover = 0/180.0*pi;
     //declare stand-in variables for saturation
     double tx = 0.0;
     double ty = 0.0;
     double tz = 0.0;
     double roll = 0.0;
     double pitch = 0.0;
+    //calculate yaw error for both hover and non-hover (this is the way Freyja does it)
+    double yaw_tgt_hover = calc_yaw_error(real_yaw, 90/180.0*pi);
+    double yaw_tgt = calc_yaw_error(real_yaw, yaw_ref);
+
     if(hover) //use hover thrust
     {
         //define matrices and all variables in terms of current state and reference variables
