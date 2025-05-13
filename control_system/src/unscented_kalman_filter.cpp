@@ -7,6 +7,7 @@ Filter::Filter() :nh_()
     last_update_time = ros::Time::now();
     T = 0.02; //seconds, since last update. Initialized here to predicted value of 0.02.
     filter_started = false;
+    hover = false;
     in_guided_nogps_mode = false;
     mp = 0.294;
     mq = 2.520;
@@ -23,15 +24,21 @@ Filter::Filter() :nh_()
             0, 0, 0,
             0, 0, 0;
     k_ << 0, 0, 1;
-    Q << 0.001*I3, Zero3,
-        Zero3, 0.001*I3;
-    R << 0.2*I3, Zero3,
-        Zero3, 0.1*I3;
+    Q << 0.0001*I3, Zero3,
+        Zero3, 0.00001*I3;
+    R << (0.1),   (-0.005), (-0.14), (-0.0003), (0.001),   (-0.0006),
+        (-0.005), (0.1),    (0.01),  (-0.0001), (-0.0001), (0.0001),
+        (-0.14),  (0.01),   (0.1),   (0.0005),  (-0.0001), (0.0005),
+        (-0.0003),(-0.0001),(0.0005),(0.0001),  (0.00002), (-0.00002),
+        (0.001),  (-0.0001),(-0.0001),(0.00002),(0.0001),  (-0.00001),
+        (-0.0006),(0.0001), (0.0005), (-0.00002),(-0.00001),(0.0006);
+    R = 10*R;
 
-    rc_sub = nh_.subscribe("/mavros/State", 1, &Filter::rc_callback, this);
+    rc_sub = nh_.subscribe("/mavros/state", 1, &Filter::rc_callback, this);
     state_sub = nh_.subscribe("/current_state", 1, &Filter::state_callback, this);
     input_sub = nh_.subscribe("/controller_debug", 1, &Filter::input_callback, this);
     filtered_state_pub = nh_.advertise<freyja_msgs::CurrentState>("/filtered_current_state", 1, true);
+    predicted_state_pub = nh_.advertise<freyja_msgs::CurrentState>("/predicted_current_state", 1, true);
     
 }
 void Filter::rc_callback(const mavros_msgs::State::ConstPtr &msg)
@@ -44,6 +51,7 @@ void Filter::rc_callback(const mavros_msgs::State::ConstPtr &msg)
     else
     {
         in_guided_nogps_mode = false;
+        filter_started = false;
     }
 }
 void Filter::state_callback(const freyja_msgs::CurrentState::ConstPtr &msg)
@@ -75,9 +83,10 @@ void Filter::state_callback(const freyja_msgs::CurrentState::ConstPtr &msg)
     {
         //run predict
         predict();
+        filter_started = true;
         //run update- get estimated state, estimated covariance
         update();
-        //publish new estimated state (and cov?)
+        //publish new estimated state 
         double w_n_estimate = estimated_mean(0,0);
         double w_e_estimate = estimated_mean(1,0);
         double w_d_estimate = estimated_mean(2,0);
@@ -102,13 +111,40 @@ void Filter::state_callback(const freyja_msgs::CurrentState::ConstPtr &msg)
         filtered_state_msg.yaw = yaw;
         filtered_state_msg.dt = T;
         filtered_state_msg.filtered = 1;
+        filtered_state_msg.hover = hover;
         filtered_state_msg.header.stamp = ros::Time::now();
         filtered_state_pub.publish(filtered_state_msg);
+        //publish predicted state
+        double w_n_predicted = predicted_mean(0,0);
+        double w_e_predicted = predicted_mean(1,0);
+        double w_d_predicted = predicted_mean(2,0);
+        double q_n_predicted = predicted_mean(3,0);
+        double q_e_predicted = predicted_mean(4,0);
+        double q_d_predicted = predicted_mean(5,0);
+        freyja_msgs::CurrentState predicted_state_msg;
+        predicted_state_msg.pn = p_n;
+        predicted_state_msg.pe = p_e;
+        predicted_state_msg.pd = p_d;
+        predicted_state_msg.vn = v_n;
+        predicted_state_msg.ve = v_e;
+        predicted_state_msg.vd = v_d;
+        predicted_state_msg.qn = q_n_predicted;
+        predicted_state_msg.qe = q_e_predicted;
+        predicted_state_msg.qd = q_d_predicted;
+        predicted_state_msg.wn = w_n_predicted;
+        predicted_state_msg.we = w_e_predicted;
+        predicted_state_msg.wd = w_d_predicted;
+        predicted_state_msg.filtered = 1;
+        predicted_state_msg.hover = hover;
+        predicted_state_msg.header.stamp = ros::Time::now();
+        predicted_state_pub.publish(predicted_state_msg);
+
     }
     else if(in_guided_nogps_mode && !filter_started) //filter not started yet
     {
         //run initialize
         initialize();
+        filter_started = true;
         //run update- get estimated state, estimated covariance
         update();
         //publish new estimated state (and cov?)
@@ -136,11 +172,37 @@ void Filter::state_callback(const freyja_msgs::CurrentState::ConstPtr &msg)
         filtered_state_msg.yaw = yaw;
         filtered_state_msg.dt = T;
         filtered_state_msg.filtered = 1;
+        filtered_state_msg.hover = hover;
         filtered_state_msg.header.stamp = ros::Time::now();
         filtered_state_pub.publish(filtered_state_msg);
+        //publish predicted state
+        double w_n_predicted = predicted_mean(0,0);
+        double w_e_predicted = predicted_mean(1,0);
+        double w_d_predicted = predicted_mean(2,0);
+        double q_n_predicted = predicted_mean(3,0);
+        double q_e_predicted = predicted_mean(4,0);
+        double q_d_predicted = predicted_mean(5,0);
+        freyja_msgs::CurrentState predicted_state_msg;
+        predicted_state_msg.pn = p_n;
+        predicted_state_msg.pe = p_e;
+        predicted_state_msg.pd = p_d;
+        predicted_state_msg.vn = v_n;
+        predicted_state_msg.ve = v_e;
+        predicted_state_msg.vd = v_d;
+        predicted_state_msg.qn = q_n_predicted;
+        predicted_state_msg.qe = q_e_predicted;
+        predicted_state_msg.qd = q_d_predicted;
+        predicted_state_msg.wn = w_n_predicted;
+        predicted_state_msg.we = w_e_predicted;
+        predicted_state_msg.wd = w_d_predicted;
+        predicted_state_msg.filtered = 1;
+        predicted_state_msg.hover = hover;
+        predicted_state_msg.header.stamp = ros::Time::now();
+        predicted_state_pub.publish(predicted_state_msg);
     }
     else //not in guided_nogps
     {
+        filter_started = false;
         //publish unfiltered state
         freyja_msgs::CurrentState filtered_state_msg;
         filtered_state_msg.pn = p_n;
@@ -160,8 +222,33 @@ void Filter::state_callback(const freyja_msgs::CurrentState::ConstPtr &msg)
         filtered_state_msg.yaw = yaw;
         filtered_state_msg.dt = T;
         filtered_state_msg.filtered = 0;
+        filtered_state_msg.hover = hover;
         filtered_state_msg.header.stamp = ros::Time::now();
         filtered_state_pub.publish(filtered_state_msg);
+        //publish predicted state
+        double w_n_predicted = predicted_mean(0,0);
+        double w_e_predicted = predicted_mean(1,0);
+        double w_d_predicted = predicted_mean(2,0);
+        double q_n_predicted = predicted_mean(3,0);
+        double q_e_predicted = predicted_mean(4,0);
+        double q_d_predicted = predicted_mean(5,0);
+        freyja_msgs::CurrentState predicted_state_msg;
+        predicted_state_msg.pn = p_n;
+        predicted_state_msg.pe = p_e;
+        predicted_state_msg.pd = p_d;
+        predicted_state_msg.vn = v_n;
+        predicted_state_msg.ve = v_e;
+        predicted_state_msg.vd = v_d;
+        predicted_state_msg.qn = q_n;
+        predicted_state_msg.qe = q_e;
+        predicted_state_msg.qd = q_d;
+        predicted_state_msg.wn = w_n;
+        predicted_state_msg.we = w_e;
+        predicted_state_msg.wd = w_d;
+        predicted_state_msg.filtered = 1;
+        predicted_state_msg.hover = hover;
+        predicted_state_msg.header.stamp = ros::Time::now();
+        predicted_state_pub.publish(predicted_state_msg);
     }
 }
 
@@ -171,6 +258,7 @@ void Filter::input_callback(const control_system::ControllerDebug::ConstPtr &msg
     double ue = msg->u_e;
     double ud = msg->u_d;
     uk_ << un, ue, ud;
+    hover = msg->hover;
 }  
 void Filter::initialize()
 {
@@ -179,9 +267,9 @@ void Filter::initialize()
     predicted_cov << 2, 0, 0, 0, 0, 0,
                     0, 2, 0, 0, 0, 0,
                     0, 0, 2, 0, 0, 0,
-                    0, 0, 0, 0.1, 0, 0,
-                    0, 0, 0, 0, 0.1, 0,
-                    0, 0, 0, 0, 0, 0.1;
+                    0, 0, 0, 1, 0, 0,
+                    0, 0, 0, 0, 1, 0,
+                    0, 0, 0, 0, 0, 1;
 }
 void Filter::predict()
 {

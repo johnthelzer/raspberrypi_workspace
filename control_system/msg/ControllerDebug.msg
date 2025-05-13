@@ -5,6 +5,9 @@ float64 rho
 float64[3] x_
 float64[3] v_
 float64[3] q_
+float64[3] w_
+float64[3] q_filtered_
+float64[3] w_filtered_
 float64[3] x_ref_
 float64[3] v_ref_
 float64 u_n
@@ -17,6 +20,7 @@ float64 roll_sat
 float64 pitch_sat
 float64 roll_actual
 float64 pitch_actual
+float64 yaw_actual
 float64 s_n
 float64 s_e
 float64 s_d
@@ -32,4 +36,5 @@ float64 s3_phi
 float64 abs_s1_phi
 float64 abs_s2_phi
 float64 abs_s3_phi
+uint8 filtered
 bool hover

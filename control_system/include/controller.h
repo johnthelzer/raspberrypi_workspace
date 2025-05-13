@@ -55,6 +55,8 @@ class Controller
         Eigen::Matrix<double, 3, 1> v_;
         Eigen::Matrix<double, 3, 1> q_;
         Eigen::Matrix<double, 3, 1> w_;
+        Eigen::Matrix<double, 3, 1> q_filtered_;
+        Eigen::Matrix<double, 3, 1> w_filtered_;
         Eigen::Matrix<double, 3, 1> x_ref_;
         Eigen::Matrix<double, 3, 1> v_ref_;
         Eigen::Matrix<double, 3, 1> x_ref_future_;
@@ -90,6 +92,8 @@ class Controller
         void reference_callback(const control_system::ReferenceState::ConstPtr &);
         ros::Subscriber state_sub;
         void state_callback(const freyja_msgs::CurrentState::ConstPtr  &);
+        ros::Subscriber filtered_state_sub;
+        void filtered_state_callback(const freyja_msgs::CurrentState::ConstPtr &);
         //publisher
         ros::Publisher input_pub;
         ros::Publisher controller_debug_pub;

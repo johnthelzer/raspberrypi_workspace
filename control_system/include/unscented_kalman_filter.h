@@ -28,6 +28,7 @@ class Filter
     double T;
     double filter_rate;
     bool filter_started;
+    bool hover;
     bool in_guided_nogps_mode;
 
     Eigen::Matrix<double, 3, 3> I3;
@@ -58,6 +59,7 @@ class Filter
 
         //publishers
         ros::Publisher filtered_state_pub;
+        ros::Publisher predicted_state_pub;
 
         //other functions
         void initialize();

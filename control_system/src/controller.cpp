@@ -8,9 +8,12 @@ bool gains_have_been_reset = false;
 double pn_ref = 0; double pe_ref = 0; double pd_ref = 0; double vn_ref = 0; double ve_ref = 0; double vd_ref = 0; double pn_ref_future = 0; double pe_ref_future = 0; double pd_ref_future = 0; double vn_ref_future = 0; double ve_ref_future = 0; double vd_ref_future = 0; double yaw_ref = 90/180*pi;
 //current state variables, initialized to 0
 double pn_ = 0; double pe_ = 0; double pd_ = 0; double vn_ = 0; double ve_ = 0; double vd_ = 0; double qn_ = 0.0; double qe_ = 1.0; double qd_ = 0; double wn_ = 1; double we_ = 1; double wd_ = 1;
+double qn_filtered = 0; double qe_filtered = 0; double qd_filtered = 0;
+double wn_filtered = 0; double we_filtered = 0; double wd_filtered = 0;
 double real_roll = 0.0;
 double real_pitch = 0.0;
 double real_yaw = 0.0;
+int filtered = 0;
 
 double channel6_pwm = 1500;
 using namespace std;
@@ -34,6 +37,7 @@ Controller::Controller() : nh_()
     rc_sub = nh_.subscribe("/mavros/rc/in", 1, &Controller::rc_callback, this);
     reference_sub = nh_.subscribe("/reference_state", 1, &Controller::reference_callback, this);
     state_sub = nh_.subscribe("/current_state", 1, &Controller::state_callback, this);
+    filtered_state_sub = nh_.subscribe("/filtered_current_state", 1, &Controller::filtered_state_callback, this);
     //defining gains and such
     lambda_x << 10, 0, 0,
                 0, 10, 0,
@@ -75,24 +79,37 @@ void Controller::define_values()//define values dynamically in terms of global v
     x_<<pn_, pe_, pd_;
     v_<<vn_, ve_, vd_;
     q_<<qn_, qe_, qd_;
+    q_filtered_ << qn_filtered, qe_filtered, qd_filtered;
     w_<<wn_, we_, wd_;
+    w_filtered_ << wn_filtered, we_filtered, wd_filtered;
     x_ref_<<pn_ref, pe_ref, pd_ref;
     v_ref_<<vn_ref, ve_ref, vd_ref;
     x_ref_future_<<pn_ref_future, pe_ref_future, pd_ref_future;
     v_ref_future_<<vn_ref_future, ve_ref_future, vd_ref_future;
-    q_hat<<0, -qd_, qe_,
+    //unfiltered
+    /*q_hat<<0, -qd_, qe_,
         qd_, 0, -qn_,
         -qe_, qn_, 0;
     w_hat<<0, -wd_, we_,
         wd_, 0, -wn_,
-        -we_, wn_, 0;
+        -we_, wn_, 0;*/
+    //filtered
+    q_hat << 0, -qd_filtered, qe_filtered,
+            qd_filtered, 0, -qn_filtered,
+            -qe_filtered, qn_filtered, 0;
+    w_hat << 0, -wd_filtered, we_filtered,
+            wd_filtered, 0, -wn_filtered,
+            -we_filtered, wn_filtered, 0;
     M<<(mp+mq)*I3, -mp*r*q_hat,
         mp*r*q_hat, mp*pow(r, 2)*I3;
-    F<<(mp+mq)*g*k_ + mp*r*(pow(wn_,2) + pow(we_,2) + pow(wd_,2))*q_,
+    //F<<(mp+mq)*g*k_ + mp*r*(pow(wn_,2) + pow(we_,2) + pow(wd_,2))*q_,
+        //mp*r*g*q_hat*k_;
+    F<<(mp+mq)*g*k_ + mp*r*(pow(wn_filtered,2) + pow(we_filtered,2) + pow(wd_filtered,2))*q_filtered_,
         mp*r*g*q_hat*k_;
     U<<I3, Zero3;
     A_top6 = M.inverse()*F;
-    A<<A_top6, w_hat*q_;
+    //A<<A_top6, w_hat*q_;
+    A << A_top6, w_hat*q_filtered_;
     B<<M.inverse()*U;
     Av = A.block(0,0,3,1);//block matrix of size 3x1, starting at indices 0,0
     Aw = A.block(3,0,3,1);
@@ -190,13 +207,25 @@ void Controller::state_callback(const freyja_msgs::CurrentState::ConstPtr  &msg)
     real_pitch = msg->pitch;
     real_yaw = msg -> yaw;
 }
+void Controller::filtered_state_callback(const freyja_msgs::CurrentState::ConstPtr &msg)
+{
+    qn_filtered = msg -> qn;
+    qe_filtered = msg -> qe;
+    qd_filtered = msg -> qd;
+    wn_filtered = msg -> wn;
+    we_filtered = msg -> we;
+    wd_filtered = msg -> wd;
+    filtered = msg -> filtered;
+}
 //other functions implementation:
 void Controller::compute_input(double& tn, double& te, double& td)
 {
     //compute sliding surfaces
-    S_ = lambda_x*(x_-x_ref_) + lambda_v*(v_-v_ref_) + lambda_q*(q_- k_);
+    //S_ = lambda_x*(x_-x_ref_) + lambda_v*(v_-v_ref_) + lambda_q*(q_- k_);
+    S_ = lambda_x*(x_-x_ref_) + lambda_v*(v_-v_ref_) + lambda_q*(q_filtered_- k_);
     cout<<"Computed sliding surfaces";
-    Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_) + lambda_q*(q_ + T*Aq - k_);
+    //Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_) + lambda_q*(q_ + T*Aq - k_);
+    Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_) + lambda_q*(q_filtered_ + T*Aq - k_);
     Eigen::Matrix<double, 3, 3> Bu = lambda_v*Bx;
     double S1 = S_(0,0);
     double S2 = S_(1,0);
@@ -215,8 +244,8 @@ void Controller::compute_input(double& tn, double& te, double& td)
             0, 0, sat(S3/phi_z);
     //adaptive gain law
 
-    //gamma_hat = gamma_hat_old + (T*alpha/rho)*abs_s_phi_old_;
-    gamma_hat = gamma_hat_old + (T*alpha/rho)*abs_s_phi_;
+    gamma_hat = gamma_hat_old + (T*alpha/rho)*abs_s_phi_old_;
+    //gamma_hat = gamma_hat_old + (T*alpha/rho)*abs_s_phi_;
     //calculate system input
     uas_ = -1*alpha*S_ + T*sat_s*gamma_hat;
 
@@ -466,6 +495,15 @@ void Controller::control_loop_function()
     debug_msg.q_[0] = q_(0,0);
     debug_msg.q_[1] = q_(1,0);
     debug_msg.q_[2] = q_(2,0);
+    debug_msg.w_[0] = w_(0,0);
+    debug_msg.w_[1] = w_(1,0);
+    debug_msg.w_[2] = w_(2,0);
+    debug_msg.q_filtered_[0] = qn_filtered;
+    debug_msg.q_filtered_[1] = qe_filtered;
+    debug_msg.q_filtered_[2] = qd_filtered;
+    debug_msg.w_filtered_[0] = wn_filtered;
+    debug_msg.w_filtered_[1] = we_filtered;
+    debug_msg.w_filtered_[2] = wd_filtered;
     debug_msg.x_ref_[0] = x_ref_(0,0);
     debug_msg.x_ref_[1] = x_ref_(1,0);
     debug_msg.x_ref_[2] = x_ref_(2,0);
@@ -498,6 +536,8 @@ void Controller::control_loop_function()
     debug_msg.hover = hover;
     debug_msg.roll_actual = real_roll*180/pi;
     debug_msg.pitch_actual = real_pitch*180/pi;
+    debug_msg.yaw_actual = real_yaw;
+    debug_msg.filtered = filtered;
     controller_debug_pub.publish(debug_msg);
 }
 
