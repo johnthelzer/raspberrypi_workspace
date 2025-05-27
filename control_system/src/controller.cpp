@@ -50,8 +50,8 @@ Controller::Controller() : nh_()
                 0, 0, -40; //previously -40I
     rho = 0.1; //previously 0.1
     alpha = 0.9; //previously 0.9
-    phi = 6; //previously 3, then 6
-    phi_z = 12; //previously 6, then 12
+    phi = 3;//6; //previously 3, then 6
+    phi_z = 6;//12; //previously 6, then 12
     phi_old = 0;
     phi_z_old = 0;
     T = 1/controller_rate;
@@ -467,6 +467,7 @@ void Controller::control_loop_function()
     }
     else //use controller-calculated thrusts
     {
+        
         if(!delayed_one_period) //delay and hover for one period before starting controller to allow new reference
         {
             define_values();

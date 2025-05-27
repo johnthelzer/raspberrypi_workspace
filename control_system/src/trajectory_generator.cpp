@@ -133,27 +133,27 @@ void interpolate()
         int b = i % 4;
         if (b == 0)
         {
-            x_n[i] = 1;
-            y_n[i] = 1;
-            z_n[i] = 0;
+            x_n[i] = 0.5;
+            y_n[i] = 0.5;
+            z_n[i] = 0.5;
         }
         else if (b == 1)
         {
-            x_n[i] = 1;
-            y_n[i] = 1;
-            z_n[i] = 0;
+            x_n[i] = 0.5;
+            y_n[i] = 0.5;
+            z_n[i] = 0.5;
         }
         else if (b == 2)
         {
-            x_n[i] = 1;
-            y_n[i] = 1;
-            z_n[i] = 0;
+            x_n[i] = 0.5;
+            y_n[i] = 0.5;
+            z_n[i] = 0.5;
         }
         else //b == 3
         {
-            x_n[i] = 1;
-            y_n[i] = 1;
-            z_n[i] = 0;
+            x_n[i] = 0.5;
+            y_n[i] = 0.5;
+            z_n[i] = 0.5;
         }
     }
     //remember, all velocities at endpoints are 0.
