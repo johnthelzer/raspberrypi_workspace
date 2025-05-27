@@ -24,15 +24,10 @@ Filter::Filter() :nh_()
             0, 0, 0,
             0, 0, 0;
     k_ << 0, 0, 1;
-    Q << 0.0001*I3, Zero3,
-        Zero3, 0.00001*I3;
-    R << (0.1),   (-0.005), (-0.14), (-0.0003), (0.001),   (-0.0006),
-        (-0.005), (0.1),    (0.01),  (-0.0001), (-0.0001), (0.0001),
-        (-0.14),  (0.01),   (0.1),   (0.0005),  (-0.0001), (0.0005),
-        (-0.0003),(-0.0001),(0.0005),(0.0001),  (0.00002), (-0.00002),
-        (0.001),  (-0.0001),(-0.0001),(0.00002),(0.0001),  (-0.00001),
-        (-0.0006),(0.0001), (0.0005), (-0.00002),(-0.00001),(0.0006);
-    R = 10*R;
+    Q << 0.001*I3, Zero3, //was 0.0001
+        Zero3, 0.001*I3;
+    R << 0.05*I3, Zero3,
+        Zero3, 0.001*I3;
 
     rc_sub = nh_.subscribe("/mavros/state", 1, &Filter::rc_callback, this);
     state_sub = nh_.subscribe("/current_state", 1, &Filter::state_callback, this);
@@ -58,6 +53,7 @@ void Filter::state_callback(const freyja_msgs::CurrentState::ConstPtr &msg)
 {
     //make state vector from updates
     T = (ros::Time::now() - last_update_time).toSec(); //time elapsed since last measurement
+    last_update_time = ros::Time::now();
     double p_n, p_e, p_d, v_n, v_e, v_d, roll, pitch, yaw;
     p_n = msg->pn;
     p_e = msg->pe;
@@ -254,9 +250,9 @@ void Filter::state_callback(const freyja_msgs::CurrentState::ConstPtr &msg)
 
 void Filter::input_callback(const control_system::ControllerDebug::ConstPtr &msg)
 {
-    double un = msg->u_n;
-    double ue = msg->u_e;
-    double ud = msg->u_d;
+    double un = msg->u_n_sat;
+    double ue = msg->u_e_sat;
+    double ud = msg->u_d_sat;
     uk_ << un, ue, ud;
     hover = msg->hover;
 }  
@@ -264,12 +260,12 @@ void Filter::initialize()
 {
     //initial guess of state should be w = 0, q = k
     predicted_mean << 0.0, 0.0, 0.0, 0.0, 0.0, 1.0;
-    predicted_cov << 2, 0, 0, 0, 0, 0,
-                    0, 2, 0, 0, 0, 0,
-                    0, 0, 2, 0, 0, 0,
-                    0, 0, 0, 1, 0, 0,
-                    0, 0, 0, 0, 1, 0,
-                    0, 0, 0, 0, 0, 1;
+    predicted_cov << 0.1, 0, 0, 0, 0, 0,
+                    0, 0.1, 0, 0, 0, 0,
+                    0, 0, 0.1, 0, 0, 0,
+                    0, 0, 0, 0.1, 0, 0,
+                    0, 0, 0, 0, 0.1, 0,
+                    0, 0, 0, 0, 0, 0.1;
 }
 void Filter::predict()
 {
@@ -328,7 +324,7 @@ void Filter::predict()
         F << (mp+mq)*g*k_ + mp*r*(std::pow(wn,2) + std::pow(we,2) + std::pow(wd,2))*q_,
         mp*r*g*q_hat*k_;
         Eigen::Matrix<double,3,3> Bq;
-        Bq = I3;
+        Bq = Zero3;
         Eigen::Matrix<double,6,6> M_inv;
         M_inv = M_.inverse();
         Eigen::Matrix<double,6,3> MinvU = M_inv*U;

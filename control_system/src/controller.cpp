@@ -8,7 +8,7 @@ bool gains_have_been_reset = false;
 double pn_ref = 0; double pe_ref = 0; double pd_ref = 0; double vn_ref = 0; double ve_ref = 0; double vd_ref = 0; double pn_ref_future = 0; double pe_ref_future = 0; double pd_ref_future = 0; double vn_ref_future = 0; double ve_ref_future = 0; double vd_ref_future = 0; double yaw_ref = 90/180*pi;
 //current state variables, initialized to 0
 double pn_ = 0; double pe_ = 0; double pd_ = 0; double vn_ = 0; double ve_ = 0; double vd_ = 0; double qn_ = 0.0; double qe_ = 1.0; double qd_ = 0; double wn_ = 1; double we_ = 1; double wd_ = 1;
-double qn_filtered = 0; double qe_filtered = 0; double qd_filtered = 0;
+double qn_filtered = 0; double qe_filtered = 0; double qd_filtered = 1.0;
 double wn_filtered = 0; double we_filtered = 0; double wd_filtered = 0;
 double real_roll = 0.0;
 double real_pitch = 0.0;
@@ -23,14 +23,14 @@ using namespace std;
 Controller::Controller() : nh_()
 {
     controller_rate = 50; //50;
-    mp = 0.294;
-    mq = 2.520;
+    mp = 0; //0.294;
+    mq = 2.312;//2.520;
     r = 0.114;
     total_mass = mp + mq;
     thrust_max = 5.0*g;
     thrust_min = 0.1*g;
-    roll_max_deg = 15;
-    pitch_max_deg = 15;
+    roll_max_deg = 30;
+    pitch_max_deg = 30;
     //publishers and subscribers
     input_pub = nh_.advertise <freyja_msgs::CtrlCommand>("/rpyt_command", 1, true);
     controller_debug_pub = nh_.advertise<control_system::ControllerDebug>("/controller_debug", 1, true);
@@ -79,9 +79,10 @@ void Controller::define_values()//define values dynamically in terms of global v
     x_<<pn_, pe_, pd_;
     v_<<vn_, ve_, vd_;
     q_<<qn_, qe_, qd_;
+    /*commented out for drone-only test
     q_filtered_ << qn_filtered, qe_filtered, qd_filtered;
     w_<<wn_, we_, wd_;
-    w_filtered_ << wn_filtered, we_filtered, wd_filtered;
+    w_filtered_ << wn_filtered, we_filtered, wd_filtered;*/
     x_ref_<<pn_ref, pe_ref, pd_ref;
     v_ref_<<vn_ref, ve_ref, vd_ref;
     x_ref_future_<<pn_ref_future, pe_ref_future, pd_ref_future;
@@ -94,6 +95,7 @@ void Controller::define_values()//define values dynamically in terms of global v
         wd_, 0, -wn_,
         -we_, wn_, 0;*/
     //filtered
+    /*commented out for drone-only test
     q_hat << 0, -qd_filtered, qe_filtered,
             qd_filtered, 0, -qn_filtered,
             -qe_filtered, qn_filtered, 0;
@@ -115,7 +117,11 @@ void Controller::define_values()//define values dynamically in terms of global v
     Aw = A.block(3,0,3,1);
     Aq = A.block(6,0,3,1);
     Bx = B.block(0,0,3,3);
-    Bw = B.block(3,0,3,3);
+    Bw = B.block(3,0,3,3);*/
+    /*added for drone-only test:*/
+    Av = g*k_;
+    Bx = 1/mq*I3;
+
 }
 //sgn function
 double sgn(double x)
@@ -222,10 +228,10 @@ void Controller::compute_input(double& tn, double& te, double& td)
 {
     //compute sliding surfaces
     //S_ = lambda_x*(x_-x_ref_) + lambda_v*(v_-v_ref_) + lambda_q*(q_- k_);
-    S_ = lambda_x*(x_-x_ref_) + lambda_v*(v_-v_ref_) + lambda_q*(q_filtered_- k_);
+    S_ = lambda_x*(x_-x_ref_) + lambda_v*(v_-v_ref_);//commented out for drone-only test// + lambda_q*(q_filtered_- k_);
     cout<<"Computed sliding surfaces";
-    //Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_) + lambda_q*(q_ + T*Aq - k_);
-    Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_) + lambda_q*(q_filtered_ + T*Aq - k_);
+    Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_);//commented out for drone-only test:// + lambda_q*(q_ + T*Aq - k_);
+    //Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_) + lambda_q*(q_filtered_ + T*Aq - k_);
     Eigen::Matrix<double, 3, 3> Bu = lambda_v*Bx;
     double S1 = S_(0,0);
     double S2 = S_(1,0);
@@ -432,6 +438,9 @@ void Controller::control_loop_function()
     double tx = 0.0;
     double ty = 0.0;
     double tz = 0.0;
+    double tn = 0.0;
+    double te = 0.0;
+    double td = 0.0;
     double roll = 0.0;
     double pitch = 0.0;
     //calculate yaw error for both hover and non-hover (this is the way Freyja does it)
@@ -448,6 +457,11 @@ void Controller::control_loop_function()
         double tz_hover = td_hover;
         apply_thrust_saturation(tx_hover, ty_hover, tz_hover, tx, ty, tz);
         apply_angle_saturation(roll, pitch, tx, ty, tz);
+        //tx, ty, tz are saturated thrust but in the body frame post-yaw (NED+yaw)
+        //tn, te, td are saturated thrust in the NED frame.
+        tn = tx*cos(real_yaw) - ty*sin(real_yaw);
+        te = tx*sin(real_yaw) + ty*cos(real_yaw);
+        td = tz;
         double thrust_magnitude = sqrt(pow(tx, 2) + pow(ty, 2) + pow(tz, 2));
         publish_to_mavros(roll, pitch, yaw_tgt_hover, thrust_magnitude);
     }
@@ -461,6 +475,11 @@ void Controller::control_loop_function()
             double tz_hover = td_hover;
             apply_thrust_saturation(tx_hover, ty_hover, tz_hover, tx, ty, tz);
             apply_angle_saturation(roll, pitch, tx, ty, tz);
+            //tx, ty, tz are saturated thrust but in the body frame post-yaw (NED+yaw)
+            //tn, te, td are saturated thrust in the NED frame.
+            tn = tx*cos(real_yaw) - ty*sin(real_yaw);
+            te = tx*sin(real_yaw) + ty*cos(real_yaw);
+            td = tz;
             double thrust_magnitude = sqrt(pow(tx, 2) + pow(ty, 2) + pow(tz, 2));
             publish_to_mavros(roll, pitch, yaw_tgt_hover, thrust_magnitude);
             delayed_one_period = true;
@@ -477,6 +496,11 @@ void Controller::control_loop_function()
             double tz_sm = td_sm;
             apply_thrust_saturation(tx_sm, ty_sm, tz_sm, tx, ty, tz);
             apply_angle_saturation(roll, pitch, tx, ty, tz);
+            //tx, ty, tz are saturated thrust but in the body frame post-yaw (NED+yaw)
+            //tn, te, td are saturated thrust in the NED frame.
+            tn = tx*cos(real_yaw) - ty*sin(real_yaw);
+            te = tx*sin(real_yaw) + ty*cos(real_yaw);
+            td = tz;
             double thrust_magnitude = sqrt(pow(tx, 2) + pow(ty, 2) + pow(tz, 2));
             publish_to_mavros(roll, pitch, yaw_tgt, thrust_magnitude);
         }        
@@ -492,6 +516,7 @@ void Controller::control_loop_function()
     debug_msg.v_[0] = v_(0,0);
     debug_msg.v_[1] = v_(1,0);
     debug_msg.v_[2] = v_(2,0);
+    /*commented out for drone-only test:
     debug_msg.q_[0] = q_(0,0);
     debug_msg.q_[1] = q_(1,0);
     debug_msg.q_[2] = q_(2,0);
@@ -503,19 +528,26 @@ void Controller::control_loop_function()
     debug_msg.q_filtered_[2] = qd_filtered;
     debug_msg.w_filtered_[0] = wn_filtered;
     debug_msg.w_filtered_[1] = we_filtered;
-    debug_msg.w_filtered_[2] = wd_filtered;
+    debug_msg.w_filtered_[2] = wd_filtered;*/
     debug_msg.x_ref_[0] = x_ref_(0,0);
     debug_msg.x_ref_[1] = x_ref_(1,0);
     debug_msg.x_ref_[2] = x_ref_(2,0);
     debug_msg.v_ref_[0] = v_ref_(0,0);
     debug_msg.v_ref_[1] = v_ref_(1,0);
     debug_msg.v_ref_[2] = v_ref_(2,0);
+    //raw input (NED)
     debug_msg.u_n = tn_sm;
     debug_msg.u_e = te_sm;
     debug_msg.u_d = td_sm;
+    //saturated input (NED+yaw)
     debug_msg.u_x_sat = tx;
     debug_msg.u_y_sat = ty;
     debug_msg.u_z_sat = tz;
+    //saturated input (NED)
+    debug_msg.u_n_sat = tn;
+    debug_msg.u_e_sat = te;
+    debug_msg.u_d_sat = td;
+    //saturated roll, pitch angles
     debug_msg.roll_sat = roll*180/pi;
     debug_msg.pitch_sat = pitch*180/pi;
     debug_msg.s_n = S_(0,0);
@@ -537,7 +569,7 @@ void Controller::control_loop_function()
     debug_msg.roll_actual = real_roll*180/pi;
     debug_msg.pitch_actual = real_pitch*180/pi;
     debug_msg.yaw_actual = real_yaw;
-    debug_msg.filtered = filtered;
+   //commented out for drone-only test:// debug_msg.filtered = filtered;
     controller_debug_pub.publish(debug_msg);
 }
 

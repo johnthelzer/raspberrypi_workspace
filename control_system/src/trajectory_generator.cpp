@@ -133,26 +133,26 @@ void interpolate()
         int b = i % 4;
         if (b == 0)
         {
-            x_n[i] = 0;
-            y_n[i] = 0;
+            x_n[i] = 1;
+            y_n[i] = 1;
             z_n[i] = 0;
         }
         else if (b == 1)
         {
-            x_n[i] = 0;
-            y_n[i] = 0;
+            x_n[i] = 1;
+            y_n[i] = 1;
             z_n[i] = 0;
         }
         else if (b == 2)
         {
-            x_n[i] = 0;
-            y_n[i] = 0;
+            x_n[i] = 1;
+            y_n[i] = 1;
             z_n[i] = 0;
         }
         else //b == 3
         {
-            x_n[i] = 0;
-            y_n[i] = 0;
+            x_n[i] = 1;
+            y_n[i] = 1;
             z_n[i] = 0;
         }
     }

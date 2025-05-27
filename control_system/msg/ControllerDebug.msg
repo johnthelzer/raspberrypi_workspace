@@ -16,6 +16,9 @@ float64 u_d
 float64 u_x_sat
 float64 u_y_sat
 float64 u_z_sat
+float64 u_n_sat
+float64 u_e_sat
+float64 u_d_sat
 float64 roll_sat
 float64 pitch_sat
 float64 roll_actual
