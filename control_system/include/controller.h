@@ -10,8 +10,8 @@
 #include "freyja_msgs/CurrentState.h"
 #include <mavros_msgs/RCIn.h>
 #include <eigen3/Eigen/Dense>
-#include "control_system/ReferenceState.h"
-#include "control_system/ControllerDebug.h"
+#include "control_system_msgs/ReferenceState.h"
+#include "control_system_msgs/ControllerDebug.h"
 
 
 
@@ -45,11 +45,23 @@ class Controller
         double r;
         double rho;
         double alpha;
+        double gamma_hat_max;
         double phi;
         double phi_z;
         double phi_old;
         double phi_z_old;
         double T;
+        double mean_ex;
+        double mean_ey;
+        double mean_ez;
+        double stddev_ex;
+        double stddev_ey;
+        double stddev_ez;
+        double E_x;
+        double E_y;
+        double E_z;
+        int controller_iterations;
+        bool in_shrinking_law;
         //variables defined each iteration
         Eigen::Matrix<double, 3, 1> x_;
         Eigen::Matrix<double, 3, 1> v_;
@@ -82,14 +94,17 @@ class Controller
         Eigen::Matrix<double, 3, 1> abs_s_phi_;
         Eigen::Matrix<double, 3, 3> sat_s;
         Eigen::Matrix<double, 3, 1> uas_;
+        Eigen::Matrix<double, 3, 1> uas_old_;
         Eigen::Matrix<double, 3, 1> u_;
+        Eigen::Matrix<double, 3, 25> S_array;
+        Eigen::Matrix<double, 3, 25> Uas_array;
         //defining values each time for matrices (easier than typing everything out symbolically)
         void define_values();
         //subscribers and their callbacks
         ros::Subscriber rc_sub;
         void rc_callback(const mavros_msgs::RCIn::ConstPtr &);
         ros::Subscriber reference_sub;
-        void reference_callback(const control_system::ReferenceState::ConstPtr &);
+        void reference_callback(const control_system_msgs::ReferenceState::ConstPtr &);
         ros::Subscriber state_sub;
         void state_callback(const freyja_msgs::CurrentState::ConstPtr  &);
         ros::Subscriber filtered_state_sub;

@@ -39,5 +39,13 @@ float64 s3_phi
 float64 abs_s1_phi
 float64 abs_s2_phi
 float64 abs_s3_phi
-uint8 filtered
+float64 mean_ex
+float64 mean_ey
+float64 mean_ez
+float64 stddev_ex
+float64 stddev_ey
+float64 stddev_ez
+uint8 controller_iterations
+bool in_shrinking_law
+uint32 filtered
 bool hover

@@ -41,14 +41,14 @@ TO DO: add yaw trajectory
 #include <sstream>
 #include <iostream>
 #include "freyja_msgs/CurrentState.h"
-#include "control_system/ReferenceState.h"
-#include "control_system/FullState.h"
+#include "control_system_msgs/ReferenceState.h"
+
 #include <eigen3/Eigen/Dense>
 #define pi 3.14159
 using namespace Eigen;
 using namespace std;
 
-const double T = .02;//0.02;
+const double T = 0.02;
 bool hover = true;
 const ros::Duration T_rostime(T);
 bool start_time_set = false;
@@ -56,12 +56,13 @@ ros::Time start_time;// = ros::Time::now();
 
 //creating segments and interpolation constants- assume starting at t=0
 const int endtime = 60; //trajectory duration, seconds
-const int step = 5; //seconds per side
+const int step = 2.5; //seconds per side
 const int num_of_steps = endtime/step + 1;
 double t_n[num_of_steps] = {};
 double x_n[num_of_steps] = {};
 double y_n[num_of_steps] = {};
 double z_n[num_of_steps] = {};
+double yaw_n[num_of_steps] = {};
 
 double a1_x[num_of_steps-1] = {};
 double a2_x[num_of_steps-1] = {};
@@ -75,6 +76,11 @@ double a1_z[num_of_steps-1] = {};
 double a2_z[num_of_steps-1] = {};
 double a3_z[num_of_steps-1] = {};
 double a4_z[num_of_steps-1] = {};
+double a1_yaw[num_of_steps-1] = {};
+double a2_yaw[num_of_steps-1] = {};
+double a3_yaw[num_of_steps-1] = {};
+double a4_yaw[num_of_steps-1] = {};
+
 //reference variables
 double px_ref;
 double py_ref;
@@ -133,27 +139,31 @@ void interpolate()
         int b = i % 4;
         if (b == 0)
         {
-            x_n[i] = 0.5;
-            y_n[i] = 0.5;
-            z_n[i] = 0.5;
+            x_n[i] = 0;
+            y_n[i] = 0;
+            z_n[i] = 0;
+            yaw_n[i] = pi/180*0;
         }
         else if (b == 1)
         {
-            x_n[i] = 0.5;
-            y_n[i] = 0.5;
-            z_n[i] = 0.5;
+            x_n[i] = 0;
+            y_n[i] = 3;
+            z_n[i] = 0;
+            yaw_n[i] = pi/180*90;
         }
         else if (b == 2)
         {
-            x_n[i] = 0.5;
-            y_n[i] = 0.5;
-            z_n[i] = 0.5;
+            x_n[i] = -3;
+            y_n[i] = 3;
+            z_n[i] = 0;
+            yaw_n[i] = pi/180*180;
         }
         else //b == 3
         {
-            x_n[i] = 0.5;
-            y_n[i] = 0.5;
-            z_n[i] = 0.5;
+            x_n[i] = -3;
+            y_n[i] = 0;
+            z_n[i] = 0;
+            yaw_n[i] = pi/180*270;
         }
     }
     //remember, all velocities at endpoints are 0.
@@ -180,6 +190,8 @@ void interpolate()
         double vf = 0;
         double w0 = 0;
         double wf = 0;
+        double yaw0 = yaw_n[i];
+        double yawf = yaw_n[i+1];
         MatrixXf A(4,4); 
         A(0,0) = pow(t0,3); A(0,1) = pow(t0,2); A(0,2) = t0; A(0,3) = 1;
         A(1,0) = pow(tf,3); A(1,1) = pow(tf,2); A(1,2) = tf; A(1,3) = 1;
@@ -192,6 +204,8 @@ void interpolate()
         by(0,0) = y0; by(1,0) = yf; by(2,0) = v0; by(3,0) = vf;
         MatrixXf bz(4,1);
         bz(0,0) = z0; bz(1,0) = zf; bz(2,0) = w0; bz(3,0) = wf;
+        //add b vector for yaw too!
+
 
         //solve
         MatrixXf cx = A.partialPivLu().solve(bx);
@@ -211,6 +225,8 @@ void interpolate()
         a2_z[i] = cz(1,0);
         a3_z[i] = cz(2,0);
         a4_z[i] = cz(3,0);
+
+        a1_yaw[i] = yaw0;
     }
 
 }   
@@ -232,6 +248,8 @@ void compute_trajectory()//computes relative trajectory
                 vx_ref = 3*a1_x[i-1]*pow(t,2)+ 2*a2_x[i-1]*t + a3_x[i-1];
                 vy_ref = 3*a1_y[i-1]*pow(t,2)+ 2*a2_y[i-1]*t + a3_y[i-1];
                 vz_ref = 3*a1_z[i-1]*pow(t,2) + 2*a2_z[i-1]*t + a3_z[i-1];
+                yaw_ref = a1_yaw[i];
+
                 break;
             }
         }
@@ -243,6 +261,7 @@ void compute_trajectory()//computes relative trajectory
             vx_ref = 0;
             vy_ref = 0;
             vz_ref = 0;
+            yaw_ref = pi/180*90;
         }   
         //repeat for t_future
         for (int i = 1; i<num_of_steps; i++) //find the smallest time stamp that the current time is less than
@@ -276,9 +295,9 @@ void compute_trajectory()//computes relative trajectory
         vx_ref_future = 0;
         vy_ref_future = 0;
         vz_ref_future = 0;
+        yaw_ref = pi/180*90;
     }
     
-    yaw_ref = pi*90/180;
 
 }
 
@@ -293,7 +312,7 @@ int main(int argc, char **argv)
     ros::Subscriber rc_sub = nh.subscribe("/mavros/rc/in", 1, rc_callback);
     ros::Subscriber current_state_sub = nh.subscribe("/current_state", 1, current_state_callback);
     //publish reference state
-    ros::Publisher reference_pub = nh.advertise<control_system::ReferenceState>("/reference_state", 1);
+    ros::Publisher reference_pub = nh.advertise<control_system_msgs::ReferenceState>("/reference_state", 1);
     
     while (nh.ok())
     {
@@ -312,20 +331,20 @@ int main(int argc, char **argv)
             start_time_set = false;
         }
         compute_trajectory();
-        control_system::ReferenceState reference_state_msg;
-        reference_state_msg.reference_data[0] = px_ref + px_offset;
-        reference_state_msg.reference_data[1] = py_ref + py_offset;
-        reference_state_msg.reference_data[2] = pz_ref + pz_offset;
-        reference_state_msg.reference_data[3] = vx_ref;
-        reference_state_msg.reference_data[4] = vy_ref;
-        reference_state_msg.reference_data[5] = vz_ref;
-        reference_state_msg.reference_data[6] = px_ref_future + px_offset;
-        reference_state_msg.reference_data[7] = py_ref_future + py_offset;
-        reference_state_msg.reference_data[8] = pz_ref_future + pz_offset;
-        reference_state_msg.reference_data[9] = vx_ref_future;
-        reference_state_msg.reference_data[10] = vy_ref_future;
-        reference_state_msg.reference_data[11] = vz_ref_future;
-        reference_state_msg.reference_data[12] = yaw_ref;
+        control_system_msgs::ReferenceState reference_state_msg;
+        reference_state_msg.px_ref = px_ref + px_offset;
+        reference_state_msg.py_ref = py_ref + py_offset;
+        reference_state_msg.pz_ref = pz_ref + pz_offset;
+        reference_state_msg.vx_ref = vx_ref;
+        reference_state_msg.vy_ref = vy_ref;
+        reference_state_msg.vz_ref = vz_ref;
+        reference_state_msg.px_ref_future = px_ref_future + px_offset;
+        reference_state_msg.py_ref_future = py_ref_future + py_offset;
+        reference_state_msg.pz_ref_future = pz_ref_future + pz_offset;
+        reference_state_msg.vx_ref_future = vx_ref_future;
+        reference_state_msg.vy_ref_future = vy_ref_future;
+        reference_state_msg.vz_ref_future = vz_ref_future;
+        reference_state_msg.yaw_ref = yaw_ref;
         
         reference_pub.publish(reference_state_msg);
         sample_rate.sleep();

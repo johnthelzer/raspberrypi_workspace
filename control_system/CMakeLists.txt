@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   cmake_modules
   freyja_msgs
+  control_system_msgs
   mavros_msgs
 )
 find_package(Eigen REQUIRED)
@@ -53,6 +54,7 @@ generate_messages(
    DEPENDENCIES
    std_msgs
    freyja_msgs
+   control_system_msgs
    mavros_msgs
 )
 
@@ -60,7 +62,7 @@ generate_messages(
 catkin_package(
    INCLUDE_DIRS include
    LIBRARIES control_system
-   CATKIN_DEPENDS Eigen3 message_generation roscpp rospy std_msgs freyja_msgs mavros_msgs message_runtime
+   CATKIN_DEPENDS Eigen3 message_generation roscpp rospy std_msgs freyja_msgs control_system_msgs mavros_msgs message_runtime
    DEPENDS system_lib Eigen
 )
 

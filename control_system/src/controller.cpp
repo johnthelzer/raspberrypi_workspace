@@ -8,23 +8,22 @@ bool gains_have_been_reset = false;
 double pn_ref = 0; double pe_ref = 0; double pd_ref = 0; double vn_ref = 0; double ve_ref = 0; double vd_ref = 0; double pn_ref_future = 0; double pe_ref_future = 0; double pd_ref_future = 0; double vn_ref_future = 0; double ve_ref_future = 0; double vd_ref_future = 0; double yaw_ref = 90/180*pi;
 //current state variables, initialized to 0
 double pn_ = 0; double pe_ = 0; double pd_ = 0; double vn_ = 0; double ve_ = 0; double vd_ = 0; double qn_ = 0.0; double qe_ = 1.0; double qd_ = 0; double wn_ = 1; double we_ = 1; double wd_ = 1;
-double qn_filtered = 0; double qe_filtered = 0; double qd_filtered = 1.0;
-double wn_filtered = 0; double we_filtered = 0; double wd_filtered = 0;
-double real_roll = 0.0;
-double real_pitch = 0.0;
-double real_yaw = 0.0;
+//filtered variables, initialized to 0
+double qn_filtered = 0; double qe_filtered = 0; double qd_filtered = 1.0; double wn_filtered = 0; double we_filtered = 0; double wd_filtered = 0;
+//roll, pitch, yaw, initialized to 0
+double real_roll = 0.0; double real_pitch = 0.0; double real_yaw = 0.0;
 int filtered = 0;
-
 double channel6_pwm = 1500;
+int n = 25;
 using namespace std;
 
 
 
 Controller::Controller() : nh_()
 {
-    controller_rate = 50; //50;
+    controller_rate = 50;
     mp = 0; //0.294;
-    mq = 2.312;//2.520;
+    mq = 2.324;//2.520;
     r = 0.114;
     total_mass = mp + mq;
     thrust_max = 5.0*g;
@@ -33,7 +32,7 @@ Controller::Controller() : nh_()
     pitch_max_deg = 30;
     //publishers and subscribers
     input_pub = nh_.advertise <freyja_msgs::CtrlCommand>("/rpyt_command", 1, true);
-    controller_debug_pub = nh_.advertise<control_system::ControllerDebug>("/controller_debug", 1, true);
+    controller_debug_pub = nh_.advertise<control_system_msgs::ControllerDebug>("/controller_debug", 1, true);
     rc_sub = nh_.subscribe("/mavros/rc/in", 1, &Controller::rc_callback, this);
     reference_sub = nh_.subscribe("/reference_state", 1, &Controller::reference_callback, this);
     state_sub = nh_.subscribe("/current_state", 1, &Controller::state_callback, this);
@@ -44,14 +43,15 @@ Controller::Controller() : nh_()
                 0, 0, 100; //previously diag [10,10,100]
     lambda_v << 10, 0, 0,
                 0, 10, 0,
-                0, 0, 10; //previously 10I
+                0, 0, 100; //previously 10I
     lambda_q << -40, 0, 0,
                 0, -40, 0,
                 0, 0, -40; //previously -40I
     rho = 0.1; //previously 0.1
     alpha = 0.9; //previously 0.9
-    phi = 3;//6; //previously 3, then 6
-    phi_z = 6;//12; //previously 6, then 12
+    gamma_hat_max = 100;
+    phi = 10;//6; //previously 3, then 6
+    phi_z = 15;//12; //previously 6, then 12
     phi_old = 0;
     phi_z_old = 0;
     T = 1/controller_rate;
@@ -72,6 +72,15 @@ Controller::Controller() : nh_()
             0, 0, 0;
     abs_s_phi_old_ << 0, 0, 0;
     S_ << 0, 0, 0;
+    uas_old_<< 0,0,0;
+    S_array.setZero();
+    Uas_array.setZero();
+    controller_iterations = 0;
+    E_x = 0;
+    E_y = 0;
+    E_z = 0;
+    in_shrinking_law = false;
+
 }
 
 void Controller::define_values()//define values dynamically in terms of global variables for each iteration
@@ -171,29 +180,34 @@ void Controller::rc_callback(const mavros_msgs::RCIn::ConstPtr &msg)
     {
         hover = true;
         delayed_one_period = false;
-        if (!gains_have_been_reset) //this only runs once, right when hover turns true
+        if (!gains_have_been_reset) //this only runs once to reset gains, right when hover turns true
         {
-            gamma_hat << 0, 0, 0;
-            gamma_hat_old << 0, 0, 0;
+            gamma_hat.setZero();
+            gamma_hat_old.setZero();
+            abs_s_phi_old_.setZero();
+            uas_old_.setZero();
+            S_array.setZero();
+            Uas_array.setZero();
+            controller_iterations = 0;
             gains_have_been_reset = true;
         }
     }
 }
-void Controller::reference_callback(const control_system::ReferenceState::ConstPtr &msg)
+void Controller::reference_callback(const control_system_msgs::ReferenceState::ConstPtr &msg)
 {
-    pn_ref = msg -> reference_data[0];
-    pe_ref = msg -> reference_data[1];
-    pd_ref = msg -> reference_data[2];
-    vn_ref = msg -> reference_data[3];
-    ve_ref = msg -> reference_data[4];
-    vd_ref = msg -> reference_data[5];
-    pn_ref_future = msg -> reference_data[6];
-    pe_ref_future = msg -> reference_data[7];
-    pd_ref_future = msg -> reference_data[8];
-    vn_ref_future = msg -> reference_data[9];
-    ve_ref_future = msg -> reference_data[10];
-    vd_ref_future = msg -> reference_data[11];
-    yaw_ref = msg -> reference_data[12];
+    pn_ref = msg -> px_ref;
+    pe_ref = msg -> py_ref;
+    pd_ref = msg -> pz_ref;
+    vn_ref = msg -> vx_ref;
+    ve_ref = msg -> vy_ref;
+    vd_ref = msg -> vz_ref;
+    pn_ref_future = msg->px_ref_future;
+    pe_ref_future = msg -> py_ref_future;
+    pd_ref_future = msg -> pz_ref_future;
+    vn_ref_future = msg -> vx_ref_future;
+    ve_ref_future = msg -> vy_ref_future;
+    vd_ref_future = msg -> vz_ref_future;
+    yaw_ref = msg -> yaw_ref;
 }
 void Controller::state_callback(const freyja_msgs::CurrentState::ConstPtr  &msg)
 {
@@ -239,32 +253,132 @@ void Controller::compute_input(double& tn, double& te, double& td)
     
     s_phi_ << S1 - (phi*sat(S1/phi)),
             S2 - (phi*sat(S2/phi)),
-            S3 - (phi_z*sat(S3/phi_z)); //this is a really cool lil function that becomes 0 when S is inside the BL phi!
+            S3 - (phi_z*sat(S3/phi_z)); //this is a really cool function that becomes 0 when S is inside the BL phi!
 
     abs_s_phi_ << fabs(s_phi_(0,0)),
                 fabs(s_phi_(1,0)),
                 fabs(s_phi_(2,0));
     
+    Eigen::Matrix<double, 3, 3> sgn_s_matrix;
+    sgn_s_matrix << sgn(S1), 0, 0,
+                    0, sgn(S2), 0,
+                    0, 0, sgn(S3);
     sat_s << sat(S1/phi), 0, 0,
             0, sat(S2/phi), 0,
             0, 0, sat(S3/phi_z);
-    //adaptive gain law
+    /*old adaptive gain law*/
+    //gamma_hat = gamma_hat_old + (T*alpha/rho)*abs_s_phi_old_;
+    //enforce maximum gains
+    /*
+    for (int i = 0; i < 3; i++)
+    {
+        if (gamma_hat(i,0) > gamma_hat_max)
+        {
+            gamma_hat(i,0) = gamma_hat_max;
+        }
+    }*/
 
-    gamma_hat = gamma_hat_old + (T*alpha/rho)*abs_s_phi_old_;
-    //gamma_hat = gamma_hat_old + (T*alpha/rho)*abs_s_phi_;
+    /*new adaptive gain law*/
+    //push values back: values stored in array from oldest (0) to newest (n) 
+    for (int i = 0; i < (n-1); i++)
+    {
+        S_array(0,i) = S_array(0,i+1);
+        S_array(1,i) = S_array(1,i+1);
+        S_array(2,i) = S_array(2,i+1);
+        Uas_array(0,i) = Uas_array(0,i+1);
+        Uas_array(1,i) = Uas_array(1,i+1);
+        Uas_array(2,i) = Uas_array(2,i+1);
+    }
+    //store newest values of S and Uas
+    S_array(0,n-1) = S_(0,0);
+    S_array(1,n-1) = S_(1,0);
+    S_array(2,n-1) = S_(2,0);
+    Uas_array(0,n-1) = uas_old_(0,0);
+    Uas_array(1,n-1) = uas_old_(1,0);
+    Uas_array(2,n-1) = uas_old_(2,0);
+    //find E array from sum of S and Uas
+    Eigen::Matrix<double, 3, 25> E_array;
+    E_array.setZero();
+    for (int i = 0; i < n; i++)
+    {
+        E_array(0,i) = 1/T*(S_array(0,i) + Uas_array(0,i));
+        E_array(1,i) = 1/T*(S_array(1,i) + Uas_array(1,i));
+        E_array(2,i) = 1/T*(S_array(2,i) + Uas_array(2,i));
+    }
+    E_x = E_array(0,(n-1));
+    E_y = E_array(1,(n-1));
+    E_z = E_array(2,(n-1));
+    //find mean of E
+    double sum_ex = 0;
+    double sum_ey = 0;
+    double sum_ez = 0;
+    for (int i = 0; i < n; i++)
+    {
+        sum_ex += E_array(0,i);
+        sum_ey += E_array(1,i);
+        sum_ez += E_array(2,i);
+    }
+    mean_ex = sum_ex/n;
+    mean_ey = sum_ey/n;
+    mean_ez = sum_ez/n;
+    //find stddev of E
+    double varsum_ex = 0;
+    double varsum_ey = 0;
+    double varsum_ez = 0;
+    for (int i = 0; i < n; i++)
+    {
+        varsum_ex += pow((E_array(0,i)-mean_ex),2);
+        varsum_ey += pow((E_array(1,i)-mean_ey),2);
+        varsum_ez += pow((E_array(2,i)-mean_ez),2);
+    }
+    stddev_ex = sqrt(varsum_ex/(n-1));
+    stddev_ey = sqrt(varsum_ey/(n-1));
+    stddev_ez = sqrt(varsum_ez/(n-1));
+    //apply new adaptation law
+    if ((fabs(S_(0,0)) <= phi) && (controller_iterations > 50)) //adaptive gain inside BL, apply new adaptive law
+    {
+        gamma_hat(0,0) = 0.02*fabs(mean_ex + 3*stddev_ex);
+        //in_shrinking_law = true;
+    }
+    else
+    {
+        gamma_hat(0,0) = gamma_hat_old(0,0) + (T*alpha/rho)*abs_s_phi_old_(0,0);
+        //in_shrinking_law = false;
+    }
+    if ((fabs(S_(1,0)) <= phi) && (controller_iterations > 50)) //adaptive gain inside BL, apply new adaptive law
+    {
+        gamma_hat(1,0) = 0.02*fabs(mean_ey + 3*stddev_ey);
+        //in_shrinking_law = true;
+    }
+    else
+    {
+        gamma_hat(1,0) = gamma_hat_old(1,0) + (T*alpha/rho)*abs_s_phi_old_(1,0);
+        //in_shrinking_law = false;
+    }
+    if ((fabs(S_(2,0)) <= phi_z) && (controller_iterations > 50)) //adaptive gain inside BL, apply new adaptive law
+    {
+        gamma_hat(2,0) = 0.02*fabs(mean_ez + 3*stddev_ez);
+        //in_shrinking_law = true;
+    }
+    else
+    {
+        gamma_hat(2,0) = gamma_hat_old(2,0) + (T*alpha/rho)*abs_s_phi_old_(2,0);
+        //in_shrinking_law = false;
+    }
+
     //calculate system input
-    uas_ = -1*alpha*S_ + T*sat_s*gamma_hat;
-
+    //uas_ = -1*alpha*S_ + T*sat_s*gamma_hat;
+    uas_ = -1*alpha*S_ + T*sgn_s_matrix*gamma_hat;
     u_ = (-1/T)*(Bu.inverse()*(sr_ + uas_));
     //output of function: change values of tn, te, td.
     tn = u_(0,0);
     te = u_(1,0);
     td = u_(2,0);
-    //publish debug values
     //update previous values for next iteration
+    controller_iterations += 1;
     gamma_hat_old = gamma_hat;
     abs_s_phi_old_ = abs_s_phi_;
-
+    uas_old_ = uas_;
 }
 
 void Controller::apply_thrust_saturation(double& tx_des, double& ty_des, double& tz_des, double& tx_sat, double& ty_sat, double& tz_sat)
@@ -507,7 +621,7 @@ void Controller::control_loop_function()
         }        
     }
     //publish debug info
-    control_system::ControllerDebug debug_msg;
+    control_system_msgs::ControllerDebug debug_msg;
     debug_msg.T = T;
     debug_msg.alpha = alpha;
     debug_msg.rho = rho;
@@ -570,6 +684,18 @@ void Controller::control_loop_function()
     debug_msg.roll_actual = real_roll*180/pi;
     debug_msg.pitch_actual = real_pitch*180/pi;
     debug_msg.yaw_actual = real_yaw;
+    debug_msg.mean_ex = mean_ex;
+    debug_msg.mean_ey = mean_ey;
+    debug_msg.mean_ez = mean_ez;
+    debug_msg.stddev_ex = stddev_ex;
+    debug_msg.stddev_ey = stddev_ey;
+    debug_msg.stddev_ez = stddev_ez;
+    debug_msg.controller_iterations = controller_iterations;
+    debug_msg.E_[0] = E_x;
+    debug_msg.E_[1] = E_y;
+    debug_msg.E_[2] = E_z;
+    debug_msg.yaw_ref = yaw_ref;
+    //debug_msg.in_shrinking_law = in_shrinking_law;
    //commented out for drone-only test:// debug_msg.filtered = filtered;
     controller_debug_pub.publish(debug_msg);
 }
