@@ -56,7 +56,7 @@ ros::Time start_time;// = ros::Time::now();
 
 //creating segments and interpolation constants- assume starting at t=0
 const int endtime = 60; //trajectory duration, seconds
-const int step = 2.5; //seconds per side
+const int step = 5; //seconds per side
 const int num_of_steps = endtime/step + 1;
 double t_n[num_of_steps] = {};
 double x_n[num_of_steps] = {};
@@ -142,28 +142,28 @@ void interpolate()
             x_n[i] = 0;
             y_n[i] = 0;
             z_n[i] = 0;
-            yaw_n[i] = pi/180*0;
+            yaw_n[i] = pi/180*90;//pi/180*0;
         }
         else if (b == 1)
         {
             x_n[i] = 0;
-            y_n[i] = 3;
+            y_n[i] = 0;
             z_n[i] = 0;
-            yaw_n[i] = pi/180*90;
+            yaw_n[i] = pi/180*90;//;
         }
         else if (b == 2)
         {
-            x_n[i] = -3;
-            y_n[i] = 3;
+            x_n[i] = 0;
+            y_n[i] = 0;
             z_n[i] = 0;
-            yaw_n[i] = pi/180*180;
+            yaw_n[i] = pi/180*90;//pi/180*180;
         }
         else //b == 3
         {
-            x_n[i] = -3;
+            x_n[i] = 0;
             y_n[i] = 0;
             z_n[i] = 0;
-            yaw_n[i] = pi/180*270;
+            yaw_n[i] = pi/180*90;//pi/180*270;
         }
     }
     //remember, all velocities at endpoints are 0.

@@ -10,7 +10,7 @@
 #include "freyja_msgs/CurrentState.h"
 #include <mavros_msgs/RCIn.h>
 #include <mavros_msgs/State.h>
-#include "control_system/ControllerDebug.h"
+#include "control_system_msgs/ControllerDebug.h"
 #include <eigen3/Eigen/Dense>
 #include <string>
 #include <iostream>
@@ -55,7 +55,7 @@ class Filter
         ros::Subscriber state_sub;
         void state_callback(const freyja_msgs::CurrentState::ConstPtr  &);
         ros::Subscriber input_sub;
-        void input_callback(const control_system::ControllerDebug::ConstPtr &);
+        void input_callback(const control_system_msgs::ControllerDebug::ConstPtr &);
 
         //publishers
         ros::Publisher filtered_state_pub;

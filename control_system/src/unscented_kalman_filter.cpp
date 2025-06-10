@@ -26,8 +26,8 @@ Filter::Filter() :nh_()
     k_ << 0, 0, 1;
     Q << 0.001*I3, Zero3, //was 0.0001
         Zero3, 0.001*I3;
-    R << 0.05*I3, Zero3,
-        Zero3, 0.001*I3;
+    R << 0.025*I3, Zero3,
+        Zero3, 0.0001*I3;
 
     rc_sub = nh_.subscribe("/mavros/state", 1, &Filter::rc_callback, this);
     state_sub = nh_.subscribe("/current_state", 1, &Filter::state_callback, this);
@@ -248,7 +248,7 @@ void Filter::state_callback(const freyja_msgs::CurrentState::ConstPtr &msg)
     }
 }
 
-void Filter::input_callback(const control_system::ControllerDebug::ConstPtr &msg)
+void Filter::input_callback(const control_system_msgs::ControllerDebug::ConstPtr &msg)
 {
     double un = msg->u_n_sat;
     double ue = msg->u_e_sat;

@@ -22,8 +22,8 @@ using namespace std;
 Controller::Controller() : nh_()
 {
     controller_rate = 50;
-    mp = 0; //0.294;
-    mq = 2.324;//2.520;
+    mp = 0.266;
+    mq = 2.540;//2.324;
     r = 0.114;
     total_mass = mp + mq;
     thrust_max = 5.0*g;
@@ -50,8 +50,8 @@ Controller::Controller() : nh_()
     rho = 0.1; //previously 0.1
     alpha = 0.9; //previously 0.9
     gamma_hat_max = 100;
-    phi = 10;//6; //previously 3, then 6
-    phi_z = 15;//12; //previously 6, then 12
+    phi = 15;//8;
+    phi_z = 20;//10;
     phi_old = 0;
     phi_z_old = 0;
     T = 1/controller_rate;
@@ -88,21 +88,20 @@ void Controller::define_values()//define values dynamically in terms of global v
     x_<<pn_, pe_, pd_;
     v_<<vn_, ve_, vd_;
     q_<<qn_, qe_, qd_;
-    /*commented out for drone-only test
     q_filtered_ << qn_filtered, qe_filtered, qd_filtered;
     w_<<wn_, we_, wd_;
-    w_filtered_ << wn_filtered, we_filtered, wd_filtered;*/
+    w_filtered_ << wn_filtered, we_filtered, wd_filtered;
     x_ref_<<pn_ref, pe_ref, pd_ref;
     v_ref_<<vn_ref, ve_ref, vd_ref;
     x_ref_future_<<pn_ref_future, pe_ref_future, pd_ref_future;
     v_ref_future_<<vn_ref_future, ve_ref_future, vd_ref_future;
     //unfiltered
-    /*q_hat<<0, -qd_, qe_,
+    q_hat<<0, -qd_, qe_,
         qd_, 0, -qn_,
         -qe_, qn_, 0;
     w_hat<<0, -wd_, we_,
         wd_, 0, -wn_,
-        -we_, wn_, 0;*/
+        -we_, wn_, 0;
     //filtered
     /*commented out for drone-only test
     q_hat << 0, -qd_filtered, qe_filtered,
@@ -110,26 +109,26 @@ void Controller::define_values()//define values dynamically in terms of global v
             -qe_filtered, qn_filtered, 0;
     w_hat << 0, -wd_filtered, we_filtered,
             wd_filtered, 0, -wn_filtered,
-            -we_filtered, wn_filtered, 0;
-    M<<(mp+mq)*I3, -mp*r*q_hat,
+            -we_filtered, wn_filtered, 0;*/
+    M<<(mp+mq)*I3, -1*mp*r*q_hat,
         mp*r*q_hat, mp*pow(r, 2)*I3;
-    //F<<(mp+mq)*g*k_ + mp*r*(pow(wn_,2) + pow(we_,2) + pow(wd_,2))*q_,
-        //mp*r*g*q_hat*k_;
-    F<<(mp+mq)*g*k_ + mp*r*(pow(wn_filtered,2) + pow(we_filtered,2) + pow(wd_filtered,2))*q_filtered_,
+    F<<((mp+mq)*g*k_ + mp*r*(pow(wn_,2) + pow(we_,2) + pow(wd_,2))*q_),
         mp*r*g*q_hat*k_;
+    //F<<(mp+mq)*g*k_ + mp*r*(pow(wn_filtered,2) + pow(we_filtered,2) + pow(wd_filtered,2))*q_filtered_,
+        //mp*r*g*q_hat*k_;
     U<<I3, Zero3;
     A_top6 = M.inverse()*F;
-    //A<<A_top6, w_hat*q_;
-    A << A_top6, w_hat*q_filtered_;
+    A<<A_top6, w_hat*q_;
+    //A << A_top6, w_hat*q_filtered_;
     B<<M.inverse()*U;
     Av = A.block(0,0,3,1);//block matrix of size 3x1, starting at indices 0,0
     Aw = A.block(3,0,3,1);
     Aq = A.block(6,0,3,1);
     Bx = B.block(0,0,3,3);
-    Bw = B.block(3,0,3,3);*/
+    Bw = B.block(3,0,3,3);
     /*added for drone-only test:*/
-    Av = g*k_;
-    Bx = 1/mq*I3;
+    //Av = g*k_;
+    //Bx = 1/mq*I3;
 
 }
 //sgn function
@@ -217,12 +216,12 @@ void Controller::state_callback(const freyja_msgs::CurrentState::ConstPtr  &msg)
     vn_ = msg -> vn;
     ve_ = msg -> ve;
     vd_ = msg -> vd;
-    qn_ = msg -> qn;
-    qe_ = msg -> qe;
-    qd_ = msg -> qd;
-    wn_ = msg -> wn;
-    we_ = msg -> we;
-    wd_ = msg -> wd;
+    qn_ = msg->qn;
+    qe_ = msg->qe;
+    qd_ = msg->qd;
+    wn_ = msg->wn;
+    we_ = msg->we;
+    wd_ = msg->wd;
     real_roll = msg->roll;
     real_pitch = msg->pitch;
     real_yaw = msg -> yaw;
@@ -241,10 +240,10 @@ void Controller::filtered_state_callback(const freyja_msgs::CurrentState::ConstP
 void Controller::compute_input(double& tn, double& te, double& td)
 {
     //compute sliding surfaces
-    //S_ = lambda_x*(x_-x_ref_) + lambda_v*(v_-v_ref_) + lambda_q*(q_- k_);
-    S_ = lambda_x*(x_-x_ref_) + lambda_v*(v_-v_ref_);//commented out for drone-only test// + lambda_q*(q_filtered_- k_);
+    S_ = lambda_x*(x_-x_ref_) + lambda_v*(v_-v_ref_) + lambda_q*(q_- k_);
+    //S_ = lambda_x*(x_-x_ref_) + lambda_v*(v_-v_ref_) + lambda_q*(q_filtered_- k_);
     cout<<"Computed sliding surfaces";
-    Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_);//commented out for drone-only test:// + lambda_q*(q_ + T*Aq - k_);
+    Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_) + lambda_q*(q_ + T*Aq - k_);
     //Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_) + lambda_q*(q_filtered_ + T*Aq - k_);
     Eigen::Matrix<double, 3, 3> Bu = lambda_v*Bx;
     double S1 = S_(0,0);
@@ -631,13 +630,13 @@ void Controller::control_loop_function()
     debug_msg.v_[0] = v_(0,0);
     debug_msg.v_[1] = v_(1,0);
     debug_msg.v_[2] = v_(2,0);
-    /*commented out for drone-only test:
     debug_msg.q_[0] = q_(0,0);
     debug_msg.q_[1] = q_(1,0);
     debug_msg.q_[2] = q_(2,0);
     debug_msg.w_[0] = w_(0,0);
     debug_msg.w_[1] = w_(1,0);
     debug_msg.w_[2] = w_(2,0);
+    /*
     debug_msg.q_filtered_[0] = qn_filtered;
     debug_msg.q_filtered_[1] = qe_filtered;
     debug_msg.q_filtered_[2] = qd_filtered;
