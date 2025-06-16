@@ -23,7 +23,7 @@ Controller::Controller() : nh_()
 {
     controller_rate = 50;
     mp = 0.266;
-    mq = 2.540;//2.324;
+    mq = 2.543;//2.324;
     r = 0.114;
     total_mass = mp + mq;
     thrust_max = 5.0*g;
@@ -44,9 +44,9 @@ Controller::Controller() : nh_()
     lambda_v << 10, 0, 0,
                 0, 10, 0,
                 0, 0, 100; //previously 10I
-    lambda_q << -40, 0, 0,
-                0, -40, 0,
-                0, 0, -40; //previously -40I
+    lambda_q << -1, 0, 0,
+                0, -1, 0,
+                0, 0, -1; //previously -40I
     rho = 0.1; //previously 0.1
     alpha = 0.9; //previously 0.9
     gamma_hat_max = 100;

@@ -139,29 +139,29 @@ void interpolate()
         int b = i % 4;
         if (b == 0)
         {
-            x_n[i] = 0;
-            y_n[i] = 0;
+            x_n[i] = 0.5;
+            y_n[i] = 0.5;
             z_n[i] = 0;
             yaw_n[i] = pi/180*90;//pi/180*0;
         }
         else if (b == 1)
         {
-            x_n[i] = 0;
-            y_n[i] = 0;
+            x_n[i] = 0.5;
+            y_n[i] = 0.5;
             z_n[i] = 0;
             yaw_n[i] = pi/180*90;//;
         }
         else if (b == 2)
         {
-            x_n[i] = 0;
-            y_n[i] = 0;
+            x_n[i] = 0.5;
+            y_n[i] = 0.5;
             z_n[i] = 0;
             yaw_n[i] = pi/180*90;//pi/180*180;
         }
         else //b == 3
         {
-            x_n[i] = 0;
-            y_n[i] = 0;
+            x_n[i] = 0.5;
+            y_n[i] = 0.5;
             z_n[i] = 0;
             yaw_n[i] = pi/180*90;//pi/180*270;
         }
