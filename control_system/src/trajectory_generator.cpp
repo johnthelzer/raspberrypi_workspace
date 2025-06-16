@@ -55,7 +55,7 @@ bool start_time_set = false;
 ros::Time start_time;// = ros::Time::now();
 
 //creating segments and interpolation constants- assume starting at t=0
-const int endtime = 60; //trajectory duration, seconds
+const int endtime = 20; //trajectory duration, seconds
 const int step = 5; //seconds per side
 const int num_of_steps = endtime/step + 1;
 double t_n[num_of_steps] = {};
@@ -103,6 +103,11 @@ double pz_current = 0;
 double px_offset = 0;
 double py_offset = 0;
 double pz_offset = 0;
+//set final value (normally 0, but for absolute trajectories the final point)
+double px_final = -0.68;
+double py_final = 6.95;
+double pz_final = -3.58;
+double yaw_final = pi/180*90;
 //rc value
 double channel6_pwm = 1500;
 
@@ -136,33 +141,40 @@ void interpolate()
     for (int i = 0; i< num_of_steps; i++)
     {
         t_n[i] = i*step;
-        int b = i % 4;
+        int b = i % 5; //4;
         if (b == 0)
         {
-            x_n[i] = 0.5;
-            y_n[i] = 0.5;
-            z_n[i] = 0;
+            x_n[i] = 0;
+            y_n[i] = 0;
+            z_n[i] = -3.5;
             yaw_n[i] = pi/180*90;//pi/180*0;
         }
         else if (b == 1)
         {
-            x_n[i] = 0.5;
-            y_n[i] = 0.5;
-            z_n[i] = 0;
+            x_n[i] = 0;
+            y_n[i] = 0;
+            z_n[i] = -3.5;
             yaw_n[i] = pi/180*90;//;
         }
         else if (b == 2)
         {
-            x_n[i] = 0.5;
-            y_n[i] = 0.5;
-            z_n[i] = 0;
+            x_n[i] = -0.5;
+            y_n[i] = 2.5;
+            z_n[i] = -3.5;
             yaw_n[i] = pi/180*90;//pi/180*180;
         }
-        else //b == 3
+        else if (b == 3) //b == 3
         {
-            x_n[i] = 0.5;
-            y_n[i] = 0.5;
-            z_n[i] = 0;
+            x_n[i] = -0.5;
+            y_n[i] = 5;
+            z_n[i] = -3.5;
+            yaw_n[i] = pi/180*90;//pi/180*270;
+        }
+        else//b == 4
+        {
+            x_n[i] = px_final;
+            y_n[i] = py_final;
+            z_n[i] = pz_final;
             yaw_n[i] = pi/180*90;//pi/180*270;
         }
     }
@@ -255,9 +267,9 @@ void compute_trajectory()//computes relative trajectory
         }
         if (t>=t_n[num_of_steps - 1])
         {   
-            px_ref = 0;
-            py_ref = 0;
-            pz_ref = 0;
+            px_ref = px_final;
+            py_ref = py_final;
+            pz_ref = pz_final;
             vx_ref = 0;
             vy_ref = 0;
             vz_ref = 0;
@@ -279,9 +291,9 @@ void compute_trajectory()//computes relative trajectory
         }
         if (t_future>=t_n[num_of_steps - 1])
         {
-            px_ref_future = 0;
-            py_ref_future = 0;
-            pz_ref_future = 0;
+            px_ref_future = px_final;
+            py_ref_future = py_final;
+            pz_ref_future = pz_final;
             vx_ref_future = 0;
             vy_ref_future = 0;
             vz_ref_future = 0;
@@ -322,9 +334,9 @@ int main(int argc, char **argv)
             interpolate();
             start_time = ros::Time::now();
             start_time_set = true;
-            px_offset = px_current;
-            py_offset = py_current;
-            pz_offset = pz_current;
+            px_offset = 0;//px_current;
+            py_offset = 0;//py_current;
+            pz_offset = 0;//pz_current;
         }
         else if(hover)
         {

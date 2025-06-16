@@ -5,7 +5,7 @@ bool hover = true;
 bool delayed_one_period = false;
 bool gains_have_been_reset = false;
 //reference variables, initialized to 0
-double pn_ref = 0; double pe_ref = 0; double pd_ref = 0; double vn_ref = 0; double ve_ref = 0; double vd_ref = 0; double pn_ref_future = 0; double pe_ref_future = 0; double pd_ref_future = 0; double vn_ref_future = 0; double ve_ref_future = 0; double vd_ref_future = 0; double yaw_ref = 90/180*pi;
+double pn_ref = 0; double pe_ref = 0; double pd_ref = 0; double vn_ref = 0; double ve_ref = 0; double vd_ref = 0; double pn_ref_future = 0; double pe_ref_future = 0; double pd_ref_future = 0; double vn_ref_future = 0; double ve_ref_future = 0; double vd_ref_future = 0; double yaw_ref = pi/180*90;
 //current state variables, initialized to 0
 double pn_ = 0; double pe_ = 0; double pd_ = 0; double vn_ = 0; double ve_ = 0; double vd_ = 0; double qn_ = 0.0; double qe_ = 1.0; double qd_ = 0; double wn_ = 1; double we_ = 1; double wd_ = 1;
 //filtered variables, initialized to 0
@@ -22,9 +22,9 @@ using namespace std;
 Controller::Controller() : nh_()
 {
     controller_rate = 50;
-    mp = 0.266;
+    mp = 0.5;//0.266;
     mq = 2.543;//2.324;
-    r = 0.114;
+    r = 0.367;//0.114;
     total_mass = mp + mq;
     thrust_max = 5.0*g;
     thrust_min = 0.1*g;
@@ -44,9 +44,9 @@ Controller::Controller() : nh_()
     lambda_v << 10, 0, 0,
                 0, 10, 0,
                 0, 0, 100; //previously 10I
-    lambda_q << -1, 0, 0,
-                0, -1, 0,
-                0, 0, -1; //previously -40I
+    lambda_q << -5, 0, 0,
+                0, -5, 0,
+                0, 0, -5; //previously -40I
     rho = 0.1; //previously 0.1
     alpha = 0.9; //previously 0.9
     gamma_hat_max = 100;
