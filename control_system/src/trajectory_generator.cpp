@@ -104,10 +104,18 @@ double px_offset = 0;
 double py_offset = 0;
 double pz_offset = 0;
 //set final value (normally 0, but for absolute trajectories the final point)
-double px_final = -0.68;
-double py_final = 6.95;
-double pz_final = -3.58;
+double px_origin = 0;
+double py_origin = 0;
+double pz_origin = 0;
+double px_increment = -8.3;
+double py_increment = 3.0;
+double pz_increment = -2.5;
+double px_final = 0;
+double py_final = 0;
+double pz_final = 0;//-2.4;
 double yaw_final = pi/180*90;
+bool armed = false;
+bool origin_set = false;
 //rc value
 double channel6_pwm = 1500;
 
@@ -129,6 +137,21 @@ void current_state_callback(const freyja_msgs::CurrentState::ConstPtr  &msg)
     px_current = msg -> pn;
     py_current = msg -> pe;
     pz_current = msg -> pd;
+    armed = msg->armed;
+    if (armed && !origin_set)
+    {
+        px_origin = px_current;
+        py_origin = py_current;
+        pz_origin = pz_current;
+        px_final = 0;//px_origin + px_increment;
+        py_final = 0;//py_origin + py_increment;
+        pz_final = 0;//pz_origin + pz_increment;
+        origin_set = true;
+    }
+    else if(!armed)
+    {
+        origin_set = false;
+    }
 }
 
 
@@ -146,35 +169,35 @@ void interpolate()
         {
             x_n[i] = 0;
             y_n[i] = 0;
-            z_n[i] = -3.5;
+            z_n[i] = 0;
             yaw_n[i] = pi/180*90;//pi/180*0;
         }
         else if (b == 1)
         {
             x_n[i] = 0;
             y_n[i] = 0;
-            z_n[i] = -3.5;
+            z_n[i] = 0;
             yaw_n[i] = pi/180*90;//;
         }
         else if (b == 2)
         {
-            x_n[i] = -0.5;
-            y_n[i] = 2.5;
-            z_n[i] = -3.5;
+            x_n[i] = 0;
+            y_n[i] = 0;
+            z_n[i] = 0;
             yaw_n[i] = pi/180*90;//pi/180*180;
         }
         else if (b == 3) //b == 3
         {
-            x_n[i] = -0.5;
-            y_n[i] = 5;
-            z_n[i] = -3.5;
+            x_n[i] = 0;
+            y_n[i] = 0;
+            z_n[i] = 0;
             yaw_n[i] = pi/180*90;//pi/180*270;
         }
         else//b == 4
         {
-            x_n[i] = px_final;
-            y_n[i] = py_final;
-            z_n[i] = pz_final;
+            x_n[i] = 0;
+            y_n[i] = 0;
+            z_n[i] = 0;
             yaw_n[i] = pi/180*90;//pi/180*270;
         }
     }
@@ -260,7 +283,7 @@ void compute_trajectory()//computes relative trajectory
                 vx_ref = 3*a1_x[i-1]*pow(t,2)+ 2*a2_x[i-1]*t + a3_x[i-1];
                 vy_ref = 3*a1_y[i-1]*pow(t,2)+ 2*a2_y[i-1]*t + a3_y[i-1];
                 vz_ref = 3*a1_z[i-1]*pow(t,2) + 2*a2_z[i-1]*t + a3_z[i-1];
-                yaw_ref = a1_yaw[i];
+                yaw_ref = a1_yaw[i-1];
 
                 break;
             }
@@ -334,9 +357,9 @@ int main(int argc, char **argv)
             interpolate();
             start_time = ros::Time::now();
             start_time_set = true;
-            px_offset = 0;//px_current;
-            py_offset = 0;//py_current;
-            pz_offset = 0;//pz_current;
+            px_offset = px_current; //0;
+            py_offset = py_current; //0;
+            pz_offset = pz_current; //0;
         }
         else if(hover)
         {

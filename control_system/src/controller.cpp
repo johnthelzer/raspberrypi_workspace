@@ -22,9 +22,9 @@ using namespace std;
 Controller::Controller() : nh_()
 {
     controller_rate = 50;
-    mp = 0.5;//0.266;
+    mp =0.471;// 0.504;//0.471;//0.266;
     mq = 2.543;//2.324;
-    r = 0.367;//0.114;
+    r = 0.367;//0.646;//0.367;//0.114;
     total_mass = mp + mq;
     thrust_max = 5.0*g;
     thrust_min = 0.1*g;
@@ -44,14 +44,14 @@ Controller::Controller() : nh_()
     lambda_v << 10, 0, 0,
                 0, 10, 0,
                 0, 0, 100; //previously 10I
-    lambda_q << -5, 0, 0,
-                0, -5, 0,
-                0, 0, -5; //previously -40I
+    lambda_q << -7, 0, 0,
+                0, -7, 0,
+                0, 0, -7; //previously -5I
     rho = 0.1; //previously 0.1
     alpha = 0.9; //previously 0.9
     gamma_hat_max = 100;
-    phi = 15;//8;
-    phi_z = 20;//10;
+    phi = 15;//15;
+    phi_z = 20;//20;
     phi_old = 0;
     phi_z_old = 0;
     T = 1/controller_rate;
