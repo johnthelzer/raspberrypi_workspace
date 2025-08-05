@@ -98,6 +98,13 @@ class Controller
         Eigen::Matrix<double, 3, 1> u_;
         Eigen::Matrix<double, 3, 25> S_array;
         Eigen::Matrix<double, 3, 25> Uas_array;
+        Eigen::Matrix<double, 3, 1> Sr_old_;
+        Eigen::Matrix<double, 3, 25> Sr_old_array_;
+        Eigen::Matrix<double, 3, 1> Bu_u_old_;
+        Eigen::Matrix<double, 3, 25> Bu_u_old_array_;
+        Eigen::Matrix<double, 3, 3> Bu;
+        Eigen::Matrix<double, 3, 1> u_ned_saturated_;
+        
         //defining values each time for matrices (easier than typing everything out symbolically)
         void define_values();
         //subscribers and their callbacks

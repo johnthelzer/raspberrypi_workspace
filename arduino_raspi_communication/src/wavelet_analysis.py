@@ -10,7 +10,7 @@ from sensor_msgs.msg import Image
 from sensor_msgs.msg import CompressedImage
 from mavros_msgs.msg import RCIn
 from cv_bridge import CvBridge, CvBridgeError
-port_name = '/dev/ttyACM0'
+port_name = '/dev/ttyACM1'
 baudrate = 115200
 char_sent = True
 initialized = False
@@ -35,7 +35,7 @@ class wavelet_analyzer:
         if not char_sent:
             #open port
             port = serial.Serial(port=port_name, baudrate=baudrate, timeout=0.25)
-            rospy.sleep(3)
+            rospy.sleep(2)
             print("port opened")
             #send start byte to port
             port.write(b'w')

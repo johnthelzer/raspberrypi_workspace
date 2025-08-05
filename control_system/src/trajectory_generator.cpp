@@ -88,7 +88,7 @@ double pz_ref;
 double vx_ref;
 double vy_ref;
 double vz_ref;
-double yaw_ref;
+double yaw_ref = 180*pi/180;
 double px_ref_future;
 double py_ref_future;
 double pz_ref_future;
@@ -107,15 +107,33 @@ double pz_offset = 0;
 double px_origin = 0;
 double py_origin = 0;
 double pz_origin = 0;
-double px_increment = -8.3;
-double py_increment = 3.0;
-double pz_increment = -2.5;
+double px_increment = 0;
+double py_increment = 0;
+double pz_increment = 0;
 double px_final = 0;
 double py_final = 0;
 double pz_final = 0;//-2.4;
-double yaw_final = pi/180*90;
+double yaw_final = 180*pi/180;
 bool armed = false;
 bool origin_set = false;
+/*stick mixing*/
+double rc_offset_n = 0;
+double rc_offset_e = 0;
+double rc_offset_d = 0;
+double yaw_offset = 0;
+double rc_increment_x = 0.10;
+double rc_increment_y = 0.10;
+double rc_increment_z = 0.10;
+double rc_increment_yaw = 0.07;
+bool x_augmented = false;
+bool y_augmented = false;
+bool z_augmented = false;
+bool yaw_augmented = false;
+double roll_pwm = 1500;
+double pitch_pwm = 1500;
+double throttle_pwm = 1500;
+double yaw_pwm = 1500;
+/*end of stick mixing*/
 //rc value
 double channel6_pwm = 1500;
 
@@ -129,7 +147,83 @@ void rc_callback(const mavros_msgs::RCIn::ConstPtr &msg)
     else
     {
         hover = true;
+	rc_offset_n = 0;
+	rc_offset_e = 0;
+	rc_offset_d = 0;
+	yaw_offset = 0;
     }
+    if(!hover)
+    {
+    /*start of stick mixing*/
+    roll_pwm = msg->channels[0];
+    pitch_pwm = msg->channels[1];
+    throttle_pwm = msg->channels[2];
+    yaw_pwm = msg -> channels[3];
+    //roll and y
+    if(roll_pwm > 1700 && !y_augmented)
+    {
+        y_augmented = true;
+        rc_offset_n += -sin(yaw_ref+yaw_offset)*rc_increment_y;
+        rc_offset_e += cos(yaw_ref+yaw_offset)*rc_increment_y;
+    }
+    else if(roll_pwm < 1300 && !y_augmented)
+    {
+        y_augmented = true;
+        rc_offset_n -= -sin(yaw_ref+yaw_offset)*rc_increment_y;
+        rc_offset_e -= cos(yaw_ref+yaw_offset)*rc_increment_y;
+    }
+    else if(roll_pwm >= 1300 && roll_pwm <= 1700)
+    {
+        y_augmented = false;
+    }
+    //pitch and -x
+    if(pitch_pwm > 1700 && !x_augmented)
+    {
+        x_augmented = true;
+        rc_offset_n -= cos(yaw_ref+yaw_offset)*rc_increment_x;
+        rc_offset_e -= sin(yaw_ref+yaw_offset)*rc_increment_x;
+    }
+    else if(pitch_pwm < 1300 && !x_augmented)
+    {
+        x_augmented = true;
+        rc_offset_n += cos(yaw_ref+yaw_offset)*rc_increment_x;
+        rc_offset_e += sin(yaw_ref+yaw_offset)*rc_increment_x;
+    }
+    else if(pitch_pwm >= 1300 && pitch_pwm <= 1700)
+    {
+        x_augmented = false;
+    }
+    //throttle and -z
+    if(throttle_pwm > 1700 && !z_augmented)
+    {
+        z_augmented = true;
+        rc_offset_d -= rc_increment_z;
+    }
+    else if(throttle_pwm < 1300 && !z_augmented)
+    {
+        z_augmented = true;
+        rc_offset_d += rc_increment_z;
+    }
+    else if(throttle_pwm >= 1300 && throttle_pwm <= 1700)
+    {
+        z_augmented = false;
+    }
+    //yaw
+    if(yaw_pwm > 1700 && !yaw_augmented)
+    {
+	yaw_augmented = true;
+	yaw_offset += rc_increment_yaw;
+    }
+    else if(yaw_pwm < 1300 && !yaw_augmented)
+    {
+	yaw_augmented = true;
+	yaw_offset -= rc_increment_yaw;
+    }
+    else if(yaw_pwm >= 1300 && yaw_pwm <= 1700)
+    {
+	yaw_augmented = false;
+    }
+    }/*end of stick mixing*/
 }
 
 void current_state_callback(const freyja_msgs::CurrentState::ConstPtr  &msg)
@@ -143,9 +237,9 @@ void current_state_callback(const freyja_msgs::CurrentState::ConstPtr  &msg)
         px_origin = px_current;
         py_origin = py_current;
         pz_origin = pz_current;
-        px_final = 0;//px_origin + px_increment;
-        py_final = 0;//py_origin + py_increment;
-        pz_final = 0;//pz_origin + pz_increment;
+        px_final = px_increment; //0 for relative trajectory, //1 for relative step
+        py_final = py_increment;
+        pz_final = pz_increment;
         origin_set = true;
     }
     else if(!armed)
@@ -170,35 +264,35 @@ void interpolate()
             x_n[i] = 0;
             y_n[i] = 0;
             z_n[i] = 0;
-            yaw_n[i] = pi/180*90;//pi/180*0;
+            yaw_n[i] = yaw_final;//pi/180*0;
         }
         else if (b == 1)
         {
             x_n[i] = 0;
             y_n[i] = 0;
             z_n[i] = 0;
-            yaw_n[i] = pi/180*90;//;
+            yaw_n[i] = yaw_final;//;
         }
         else if (b == 2)
         {
             x_n[i] = 0;
             y_n[i] = 0;
             z_n[i] = 0;
-            yaw_n[i] = pi/180*90;//pi/180*180;
+            yaw_n[i] = yaw_final;//pi/180*180;
         }
         else if (b == 3) //b == 3
         {
             x_n[i] = 0;
             y_n[i] = 0;
             z_n[i] = 0;
-            yaw_n[i] = pi/180*90;//pi/180*270;
+            yaw_n[i] = yaw_final;//pi/180*270;
         }
         else//b == 4
         {
             x_n[i] = 0;
             y_n[i] = 0;
             z_n[i] = 0;
-            yaw_n[i] = pi/180*90;//pi/180*270;
+            yaw_n[i] = yaw_final;//pi/180*270;
         }
     }
     //remember, all velocities at endpoints are 0.
@@ -296,7 +390,7 @@ void compute_trajectory()//computes relative trajectory
             vx_ref = 0;
             vy_ref = 0;
             vz_ref = 0;
-            yaw_ref = pi/180*90;
+            yaw_ref = yaw_final;
         }   
         //repeat for t_future
         for (int i = 1; i<num_of_steps; i++) //find the smallest time stamp that the current time is less than
@@ -330,7 +424,7 @@ void compute_trajectory()//computes relative trajectory
         vx_ref_future = 0;
         vy_ref_future = 0;
         vz_ref_future = 0;
-        yaw_ref = pi/180*90;
+        yaw_ref = yaw_final;
     }
     
 
@@ -357,7 +451,7 @@ int main(int argc, char **argv)
             interpolate();
             start_time = ros::Time::now();
             start_time_set = true;
-            px_offset = px_current; //0;
+            px_offset = px_current;// px_current; (for relative trajectory); //px_origin; (for absolute trajectory)
             py_offset = py_current; //0;
             pz_offset = pz_current; //0;
         }
@@ -367,19 +461,22 @@ int main(int argc, char **argv)
         }
         compute_trajectory();
         control_system_msgs::ReferenceState reference_state_msg;
-        reference_state_msg.px_ref = px_ref + px_offset;
-        reference_state_msg.py_ref = py_ref + py_offset;
-        reference_state_msg.pz_ref = pz_ref + pz_offset;
+        //modified with stick mixing
+        /*if relative trajectory, px_ref = increment, px_offset = starting position of trajectory
+        if absolute trajectory, px_ref = increment, px_offset = origin*/
+        reference_state_msg.px_ref = px_ref + px_offset + rc_offset_n; 
+        reference_state_msg.py_ref = py_ref + py_offset + rc_offset_e;
+        reference_state_msg.pz_ref = pz_ref + pz_offset + rc_offset_d;
         reference_state_msg.vx_ref = vx_ref;
         reference_state_msg.vy_ref = vy_ref;
         reference_state_msg.vz_ref = vz_ref;
-        reference_state_msg.px_ref_future = px_ref_future + px_offset;
-        reference_state_msg.py_ref_future = py_ref_future + py_offset;
-        reference_state_msg.pz_ref_future = pz_ref_future + pz_offset;
+        reference_state_msg.px_ref_future = px_ref_future + px_offset + rc_offset_n;
+        reference_state_msg.py_ref_future = py_ref_future + py_offset + rc_offset_e;
+        reference_state_msg.pz_ref_future = pz_ref_future + pz_offset + rc_offset_d;
         reference_state_msg.vx_ref_future = vx_ref_future;
         reference_state_msg.vy_ref_future = vy_ref_future;
         reference_state_msg.vz_ref_future = vz_ref_future;
-        reference_state_msg.yaw_ref = yaw_ref;
+        reference_state_msg.yaw_ref = yaw_ref + yaw_offset;
         
         reference_pub.publish(reference_state_msg);
         sample_rate.sleep();
@@ -387,4 +484,3 @@ int main(int argc, char **argv)
     
     return 0;
 }
-

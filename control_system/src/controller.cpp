@@ -18,13 +18,12 @@ int n = 25;
 using namespace std;
 
 
-
 Controller::Controller() : nh_()
 {
     controller_rate = 50;
-    mp =0.471;// 0.504;//0.471;//0.266;
-    mq = 2.543;//2.324;
-    r = 0.367;//0.646;//0.367;//0.114;
+    mp = 0.650;//0.471;//0.471;//0.266; //0.603 with no rod, 0.649 with rod
+    mq = 2.630;
+    r = 0.367;//0.114;
     total_mass = mp + mq;
     thrust_max = 5.0*g;
     thrust_min = 0.1*g;
@@ -43,10 +42,10 @@ Controller::Controller() : nh_()
                 0, 0, 100; //previously diag [10,10,100]
     lambda_v << 10, 0, 0,
                 0, 10, 0,
-                0, 0, 100; //previously 10I
+                0, 0, 100; //previously 10, 10, 100
     lambda_q << -7, 0, 0,
                 0, -7, 0,
-                0, 0, -7; //previously -5I
+                0, 0, -7; //previously -7I
     rho = 0.1; //previously 0.1
     alpha = 0.9; //previously 0.9
     gamma_hat_max = 100;
@@ -73,6 +72,9 @@ Controller::Controller() : nh_()
     abs_s_phi_old_ << 0, 0, 0;
     S_ << 0, 0, 0;
     uas_old_<< 0,0,0;
+    Sr_old_ << 0,0,0;
+    Bu_u_old_ << 0,0,0;
+    u_ned_saturated_ << 0,0,0;
     S_array.setZero();
     Uas_array.setZero();
     controller_iterations = 0;
@@ -186,6 +188,8 @@ void Controller::rc_callback(const mavros_msgs::RCIn::ConstPtr &msg)
             abs_s_phi_old_.setZero();
             uas_old_.setZero();
             S_array.setZero();
+            Sr_old_array_.setZero();
+            Bu_u_old_array_.setZero();
             Uas_array.setZero();
             controller_iterations = 0;
             gains_have_been_reset = true;
@@ -244,8 +248,7 @@ void Controller::compute_input(double& tn, double& te, double& td)
     //S_ = lambda_x*(x_-x_ref_) + lambda_v*(v_-v_ref_) + lambda_q*(q_filtered_- k_);
     cout<<"Computed sliding surfaces";
     Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_) + lambda_q*(q_ + T*Aq - k_);
-    //Eigen::Matrix<double, 3, 1> sr_ = lambda_x*(x_ + T*v_ - x_ref_future_) + lambda_v*(v_ + T*Av - v_ref_future_) + lambda_q*(q_filtered_ + T*Aq - k_);
-    Eigen::Matrix<double, 3, 3> Bu = lambda_v*Bx;
+    Bu = lambda_v*Bx;
     double S1 = S_(0,0);
     double S2 = S_(1,0);
     double S3 = S_(2,0);
@@ -278,6 +281,7 @@ void Controller::compute_input(double& tn, double& te, double& td)
     }*/
 
     /*new adaptive gain law*/
+    
     //push values back: values stored in array from oldest (0) to newest (n) 
     for (int i = 0; i < (n-1); i++)
     {
@@ -287,7 +291,14 @@ void Controller::compute_input(double& tn, double& te, double& td)
         Uas_array(0,i) = Uas_array(0,i+1);
         Uas_array(1,i) = Uas_array(1,i+1);
         Uas_array(2,i) = Uas_array(2,i+1);
+        Sr_old_array_(0,i) = Sr_old_array_(0,i+1);
+        Sr_old_array_(1,i) = Sr_old_array_(1,i+1);
+        Sr_old_array_(2,i) = Sr_old_array_(2,i+1);
+        Bu_u_old_array_(0,i) = Bu_u_old_array_(0,i+1);
+        Bu_u_old_array_(1,i) = Bu_u_old_array_(1,i+1);
+        Bu_u_old_array_(2,i) = Bu_u_old_array_(2,i+1);
     }
+
     //store newest values of S and Uas
     S_array(0,n-1) = S_(0,0);
     S_array(1,n-1) = S_(1,0);
@@ -295,18 +306,28 @@ void Controller::compute_input(double& tn, double& te, double& td)
     Uas_array(0,n-1) = uas_old_(0,0);
     Uas_array(1,n-1) = uas_old_(1,0);
     Uas_array(2,n-1) = uas_old_(2,0);
+    Sr_old_array_(0,n-1) = Sr_old_(0,0);
+    Sr_old_array_(1,n-1) = Sr_old_(1,0);
+    Sr_old_array_(2,n-1) = Sr_old_(2,0);
+    Bu_u_old_array_(0,n-1) = Bu_u_old_(0,0);
+    Bu_u_old_array_(1,n-1) = Bu_u_old_(1,0);
+    Bu_u_old_array_(2,n-1) = Bu_u_old_(2,0);
     //find E array from sum of S and Uas
     Eigen::Matrix<double, 3, 25> E_array;
     E_array.setZero();
     for (int i = 0; i < n; i++)
     {
-        E_array(0,i) = 1/T*(S_array(0,i) + Uas_array(0,i));
-        E_array(1,i) = 1/T*(S_array(1,i) + Uas_array(1,i));
-        E_array(2,i) = 1/T*(S_array(2,i) + Uas_array(2,i));
+        //E_array(0,i) = T*1/T*(S_array(0,i) + Uas_array(0,i));
+        //E_array(1,i) = T*1/T*(S_array(1,i) + Uas_array(1,i));
+        //E_array(2,i) = T*1/T*(S_array(2,i) + Uas_array(2,i));
+        E_array(0,i) = 0.2*1/T*(S_array(0,i) - Sr_old_array_(0,i) - T*Bu_u_old_array_(0,i));
+        E_array(1,i) = 0.2*1/T*(S_array(1,i) - Sr_old_array_(1,i) - T*Bu_u_old_array_(1,i));
+        E_array(2,i) = 0.2*1/T*(S_array(2,i) - Sr_old_array_(2,i) - T*Bu_u_old_array_(2,i));
     }
-    E_x = E_array(0,(n-1));
-    E_y = E_array(1,(n-1));
-    E_z = E_array(2,(n-1));
+    E_x = E_array(0,(n-1)); //1/0.1*(S_(0,0) - Sr_old_(0,0) - T*Bu_u_old_(0,0));         //most recent estimation
+    E_y = E_array(1,(n-1)); //1/0.1*(S_(1,0) - Sr_old_(1,0) - T*Bu_u_old_(1,0));         
+    E_z = E_array(2,(n-1)); //1/0.1*(S_(2,0) - Sr_old_(2,0) - T*Bu_u_old_(2,0));      //
+    
     //find mean of E
     double sum_ex = 0;
     double sum_ey = 0;
@@ -336,17 +357,20 @@ void Controller::compute_input(double& tn, double& te, double& td)
     //apply new adaptation law
     if ((fabs(S_(0,0)) <= phi) && (controller_iterations > 50)) //adaptive gain inside BL, apply new adaptive law
     {
-        gamma_hat(0,0) = 0.02*fabs(mean_ex + 3*stddev_ex);
+        gamma_hat(0,0) = 1.05*fabs(mean_ex); //fabs(E_x);
+        //gamma_hat(0,0) = 1*fabs(mean_ex + 3*stddev_ex);
         //in_shrinking_law = true;
     }
     else
     {
         gamma_hat(0,0) = gamma_hat_old(0,0) + (T*alpha/rho)*abs_s_phi_old_(0,0);
+        
         //in_shrinking_law = false;
     }
     if ((fabs(S_(1,0)) <= phi) && (controller_iterations > 50)) //adaptive gain inside BL, apply new adaptive law
     {
-        gamma_hat(1,0) = 0.02*fabs(mean_ey + 3*stddev_ey);
+        gamma_hat(1,0) = 1.05*fabs(mean_ey); //fabs(E_y);
+        //gamma_hat(1,0) = 1*fabs(mean_ey + 3*stddev_ey);
         //in_shrinking_law = true;
     }
     else
@@ -356,7 +380,8 @@ void Controller::compute_input(double& tn, double& te, double& td)
     }
     if ((fabs(S_(2,0)) <= phi_z) && (controller_iterations > 50)) //adaptive gain inside BL, apply new adaptive law
     {
-        gamma_hat(2,0) = 0.02*fabs(mean_ez + 3*stddev_ez);
+        gamma_hat(2,0) = 1.05*fabs(mean_ez);//fabs(E_z);
+        //gamma_hat(2,0) = 1*fabs(mean_ez + 3*stddev_ez);
         //in_shrinking_law = true;
     }
     else
@@ -364,7 +389,7 @@ void Controller::compute_input(double& tn, double& te, double& td)
         gamma_hat(2,0) = gamma_hat_old(2,0) + (T*alpha/rho)*abs_s_phi_old_(2,0);
         //in_shrinking_law = false;
     }
-
+    
     //calculate system input
     //uas_ = -1*alpha*S_ + T*sat_s*gamma_hat;
     uas_ = -1*alpha*S_ + T*sgn_s_matrix*gamma_hat;
@@ -378,6 +403,7 @@ void Controller::compute_input(double& tn, double& te, double& td)
     gamma_hat_old = gamma_hat;
     abs_s_phi_old_ = abs_s_phi_;
     uas_old_ = uas_;
+    Sr_old_ = sr_;
 }
 
 void Controller::apply_thrust_saturation(double& tx_des, double& ty_des, double& tz_des, double& tx_sat, double& ty_sat, double& tz_sat)
@@ -557,7 +583,7 @@ void Controller::control_loop_function()
     double roll = 0.0;
     double pitch = 0.0;
     //calculate yaw error for both hover and non-hover (this is the way Freyja does it)
-    double yaw_tgt_hover = calc_yaw_error(real_yaw, 90/180.0*pi);
+    double yaw_tgt_hover = calc_yaw_error(real_yaw, -90/180.0*pi);
     double yaw_tgt = calc_yaw_error(real_yaw, yaw_ref);
 
     if(hover) //use hover thrust
@@ -575,6 +601,8 @@ void Controller::control_loop_function()
         tn = tx*cos(real_yaw) - ty*sin(real_yaw);
         te = tx*sin(real_yaw) + ty*cos(real_yaw);
         td = tz;
+        //u_ned_saturated_ << tn, te, td;
+        //Bu_u_old_ = Bu*u_ned_saturated_;
         double thrust_magnitude = sqrt(pow(tx, 2) + pow(ty, 2) + pow(tz, 2));
         publish_to_mavros(roll, pitch, yaw_tgt_hover, thrust_magnitude);
     }
@@ -594,6 +622,8 @@ void Controller::control_loop_function()
             tn = tx*cos(real_yaw) - ty*sin(real_yaw);
             te = tx*sin(real_yaw) + ty*cos(real_yaw);
             td = tz;
+            u_ned_saturated_ << tn, te, td;
+            Bu_u_old_ = Bu*u_ned_saturated_;
             double thrust_magnitude = sqrt(pow(tx, 2) + pow(ty, 2) + pow(tz, 2));
             publish_to_mavros(roll, pitch, yaw_tgt_hover, thrust_magnitude);
             delayed_one_period = true;
@@ -615,6 +645,8 @@ void Controller::control_loop_function()
             tn = tx*cos(real_yaw) - ty*sin(real_yaw);
             te = tx*sin(real_yaw) + ty*cos(real_yaw);
             td = tz;
+            u_ned_saturated_ << tn, te, td;
+            Bu_u_old_ = Bu*u_ned_saturated_;
             double thrust_magnitude = sqrt(pow(tx, 2) + pow(ty, 2) + pow(tz, 2));
             publish_to_mavros(roll, pitch, yaw_tgt, thrust_magnitude);
         }        
